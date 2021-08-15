@@ -1,44 +1,32 @@
-use std::{path::Path, time::Instant};
+use std::{env, net::SocketAddr};
 
-use certmanager::{CertManager, FileCertManager};
-use serde::{Serialize, Deserialize};
+use actix_web::{App, HttpServer};
+use auth1::{create_pool, email::SmtpConnSpec};
+use dotenv::dotenv;
 
-mod certmanager;
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    dotenv().ok();
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Claims {
-    pub sub: String,
-    pub company: String,
-    pub exp: usize,
-}
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL is not set");
+    let pool = create_pool(&database_url);
 
-fn main() {
-    let claims = Claims {
-        sub: "user1234".to_owned(),
-        company: "Skolorna".to_owned(),
-        exp: 100_000_000_000,
-    };
+    let smtp_host = env::var("SMTP_HOST").expect("SMTP_HOST is not set");
+    let smtp_username = env::var("SMTP_USERNAME").expect("SMTP_USERNAME is not set");
+    let smtp_password = env::var("SMTP_PASSWORD").expect("SMTP_PASSWORD is not set");
+    let smtp_spec = SmtpConnSpec::new(smtp_host, smtp_username, smtp_password);
 
-    let cert_manager = FileCertManager::new(Path::new("certs").to_owned()).unwrap();
+    let addr: SocketAddr = "0.0.0.0:8000".parse().unwrap();
 
-    let encode_start = Instant::now();
+    eprintln!("Binding {}", addr);
 
-    let token = cert_manager.encode_jwt(&claims).unwrap();
-
-    // let token = jwt::encode(&claims).expect("failed to sign token");
-
-    println!("{}", token);
-    println!("{}ms encode", encode_start.elapsed().as_millis());
-
-    let decoded = cert_manager.decode_jwt::<Claims>(&token).unwrap();
-    
-    let key_id = decoded.header.kid.clone().unwrap();
-
-    let jwk = cert_manager.get_public_jwk(&key_id).unwrap();
-
-    println!("{}", jwk.to_string());
-
-    // let decoded = jwt::decode(&token).expect("failed to verify token");
-
-    println!("{:?}", decoded.header);
+    HttpServer::new(move || {
+        App::new()
+            .data(pool.clone())
+            .data(smtp_spec.clone())
+            .configure(auth1::routes::configure)
+    })
+    .bind(addr)?
+    .run()
+    .await
 }
