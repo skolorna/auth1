@@ -1,11 +1,13 @@
 use crate::schema::users;
 use chrono::{DateTime, Utc};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Queryable, Clone, Serialize)]
+pub type UserId = i32;
+
+#[derive(Debug, Queryable, Identifiable, Clone, Serialize)]
 #[serde(into = "JsonUser")]
 pub struct User {
-    pub id: i32,
+    pub id: UserId,
     pub email: String,
     pub email_verified: bool,
     pub hash: String,
@@ -23,7 +25,7 @@ pub struct NewUser<'a> {
 /// such as the password hash.
 #[derive(Debug, Serialize, Deserialize)]
 struct JsonUser {
-    id: i32,
+    id: UserId,
     email: String,
     email_verified: bool,
     created_at: DateTime<Utc>,
@@ -60,9 +62,9 @@ mod tests {
         let user = User {
             created_at: DateTime::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc),
             id: 31415,
-            email: "user@example.com".to_owned(),
+            email: "user@example.com".into(),
             email_verified: true,
-            hash: "quite secret; do not share".to_owned(),
+            hash: "quite secret; do not share".into(),
         };
 
         let serialized = serde_json::to_value(&user).unwrap();

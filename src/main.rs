@@ -1,5 +1,6 @@
 use std::{env, net::SocketAddr};
 
+use actix_web::middleware::{normalize, Logger};
 use actix_web::{App, HttpServer};
 use auth1::{create_pool, email::SmtpConnSpec};
 use dotenv::dotenv;
@@ -7,6 +8,7 @@ use dotenv::dotenv;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
+    env_logger::init();
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL is not set");
     let pool = create_pool(&database_url);
@@ -24,7 +26,11 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .data(pool.clone())
             .data(smtp_spec.clone())
+            .wrap(normalize::NormalizePath::new(
+                normalize::TrailingSlash::Trim,
+            ))
             .configure(auth1::routes::configure)
+            .wrap(Logger::default())
     })
     .bind(addr)?
     .run()

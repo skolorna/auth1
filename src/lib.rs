@@ -1,29 +1,27 @@
 pub mod email;
+pub mod identity;
 pub mod models;
 pub mod result;
 pub mod routes;
 pub mod schema;
+pub mod token;
 
 #[macro_use]
 extern crate diesel;
 
-use std::pin::Pin;
+use std::str::FromStr;
 
-use actix_web::{http::header::Header, web, FromRequest};
-use actix_web_httpauth::headers::authorization::{Authorization, Bearer};
 use diesel::{
     r2d2::{self, ConnectionManager},
     ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl,
 };
-use futures_util::Future;
-use jsonwebtoken::{Algorithm, DecodingKey, Validation};
+use lettre::EmailAddress;
 use models::User;
 use pbkdf2::password_hash::{PasswordHash, PasswordVerifier};
-use serde::{Deserialize, Serialize};
-use validator::Validate;
+use serde::Deserialize;
 
-use crate::result::Result;
-use crate::{models::NewUser, result::Error};
+use crate::result::Error;
+use crate::{models::user::NewUser, result::Result};
 
 pub type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 pub type DbConn = r2d2::PooledConnection<ConnectionManager<PgConnection>>;
@@ -40,25 +38,20 @@ pub fn create_pool(database_url: &str) -> DbPool {
     pool
 }
 
-#[derive(Debug, Validate, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct CreateUser {
-    #[validate(email)]
     pub email: String,
-
     pub password: String,
 }
 
 pub fn create_user(conn: &DbConn, query: CreateUser) -> Result<User> {
-    if query.validate().is_err() {
-        panic!("invalid query");
-    }
-
     use crate::schema::users;
 
+    let email = EmailAddress::from_str(&query.email).map_err(|_| Error::InvalidEmail)?;
     let hash = hash_password(query.password.as_bytes());
 
     let new_user = NewUser {
-        email: &query.email,
+        email: &email.to_string(),
         hash: &hash,
     };
 
@@ -76,6 +69,13 @@ pub fn create_user(conn: &DbConn, query: CreateUser) -> Result<User> {
     Ok(inserted_row)
 }
 
+/// Hash and salt a password.
+/// ```
+/// use auth1::hash_password;
+///
+/// let p = b"gru";
+/// assert_ne!(hash_password(p), hash_password(p));
+/// ```
 pub fn hash_password(password: &[u8]) -> String {
     use pbkdf2::{
         password_hash::{PasswordHasher, SaltString},
@@ -119,69 +119,11 @@ pub fn get_user_by_email(conn: &DbConn, email: &str) -> Result<User> {
         .ok_or(Error::UserNotFound)
 }
 
-pub fn sign_in_with_password(conn: &DbConn, email: &str, password: &str) -> Result<User> {
+pub fn login_with_password(conn: &DbConn, email: &str, password: &str) -> Result<User> {
     let user: User = get_user_by_email(conn, email)?;
     let hash = PasswordHash::new(&user.hash).expect("failed to parse hash");
 
     verify_password(password.as_bytes(), &hash)?;
 
     Ok(user)
-}
-
-#[derive(Debug)]
-pub struct Identity {
-    user: User,
-}
-
-impl Identity {
-    pub fn new(user: User) -> Self {
-        Self {
-            user,
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AccessTokenClaims {
-    /// Subject of the token (the user id).
-    sub: i32,
-
-    /// Expiration timestamp of the token (UNIX timestamp).
-    exp: i64,
-}
-
-impl FromRequest for Identity {
-    type Error = Error;
-    type Future = Pin<Box<dyn Future<Output = core::result::Result<Identity, Error>>>>;
-    type Config = ();
-
-    fn from_request(req: &actix_web::HttpRequest, _: &mut actix_web::dev::Payload) -> Self::Future {
-        let token = match Authorization::<Bearer>::parse(req) {
-            Ok(authorization) => {
-                let bearer = authorization.into_scheme();
-                bearer.token().to_string()
-            }
-            Err(_) => return Box::pin(async { Err(Error::MissingOrInvalidToken) }),
-        };
-
-        let pool = req.app_data::<web::Data<DbPool>>().unwrap().clone();
-
-        Box::pin(async move {
-            // let header = jsonwebtoken::decode_header(&token).unwrap();
-            use schema::users;
-
-            let conn = pool.get()?;
-
-            const SECRET: &[u8] = b"secret";
-            let decoded = jsonwebtoken::decode::<AccessTokenClaims>(
-                &token,
-                &DecodingKey::from_secret(SECRET),
-                &Validation::new(Algorithm::HS256),
-            ).unwrap();
-
-            let user: User = users::table.find(decoded.claims.sub).first(&conn)?;
-
-            Ok(Identity::new(user))
-        })
-    }
 }

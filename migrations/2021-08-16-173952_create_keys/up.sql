@@ -1,0 +1,9 @@
+-- Your SQL goes here
+CREATE TABLE keys (
+	id SERIAL PRIMARY KEY,
+	sub SERIAL,
+	public_key BYTEA NOT NULL,
+	private_key BYTEA NOT NULL,
+	iat TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	FOREIGN KEY (sub) REFERENCES users(id) ON DELETE CASCADE
+);

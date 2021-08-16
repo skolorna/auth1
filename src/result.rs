@@ -3,29 +3,41 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("invalid credentials")]
-    InvalidCredentials,
-
-    #[error("internal server error")]
-    InternalError,
-
-    #[error("something else has the same unique value")]
-    UniqueViolation,
-
     #[error("database error")]
     DieselError(#[from] diesel::result::Error),
+
+    #[error("failed to compose email")]
+    EmailFailed(#[from] lettre_email::error::Error),
 
     #[error("email already in use")]
     EmailInUse,
 
-    #[error("user not found")]
-    UserNotFound,
+    #[error("internal server error")]
+    InternalError,
 
-    #[error("missing or invalid token")]
-    MissingOrInvalidToken,
+    #[error("invalid credentials")]
+    InvalidCredentials,
+
+    #[error("invalid email")]
+    InvalidEmail,
+
+    #[error("key not found")]
+    KeyNotFound,
 
     #[error("malformed token")]
     MalformedToken,
+
+    #[error("missing or invalid token")]
+    MissingOrMalformedToken,
+
+    #[error("email delivery failed")]
+    SmtpError(#[from] lettre::smtp::error::Error),
+
+    #[error("something else has the same unique value")]
+    UniqueViolation,
+
+    #[error("user not found")]
+    UserNotFound,
 }
 
 impl ResponseError for Error {
@@ -47,8 +59,12 @@ impl ResponseError for Error {
             }
             EmailInUse => StatusCode::CONFLICT,
             UserNotFound => StatusCode::NOT_FOUND,
-            MissingOrInvalidToken => StatusCode::BAD_REQUEST,
+            MissingOrMalformedToken => StatusCode::UNAUTHORIZED,
             MalformedToken => StatusCode::BAD_REQUEST,
+            EmailFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            SmtpError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            InvalidEmail => StatusCode::BAD_REQUEST,
+            KeyNotFound => StatusCode::NOT_FOUND,
         }
     }
 }
@@ -56,6 +72,12 @@ impl ResponseError for Error {
 impl From<pbkdf2::password_hash::Error> for Error {
     fn from(_: pbkdf2::password_hash::Error) -> Self {
         Self::InvalidCredentials
+    }
+}
+
+impl From<aes_gcm::Error> for Error {
+    fn from(_: aes_gcm::Error) -> Self {
+        Self::InvalidCredentials // I wish the error was more transparent
     }
 }
 
