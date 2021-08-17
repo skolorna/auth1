@@ -13,12 +13,13 @@ use std::str::FromStr;
 
 use diesel::{
     r2d2::{self, ConnectionManager},
-    ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl,
+    PgConnection, RunQueryDsl,
 };
 use lettre::EmailAddress;
 use models::User;
 use pbkdf2::password_hash::{PasswordHash, PasswordVerifier};
 use serde::Deserialize;
+use uuid::Uuid;
 
 use crate::result::Error;
 use crate::{models::user::NewUser, result::Result};
@@ -51,6 +52,7 @@ pub fn create_user(conn: &DbConn, query: CreateUser) -> Result<User> {
     let hash = hash_password(query.password.as_bytes());
 
     let new_user = NewUser {
+        id: Uuid::new_v4(),
         email: &email.to_string(),
         hash: &hash,
     };
@@ -110,17 +112,8 @@ pub fn verify_password(
     pbkdf2::Pbkdf2.verify_password(password, hash)
 }
 
-pub fn get_user_by_email(conn: &DbConn, email: &str) -> Result<User> {
-    use crate::schema::users::{columns, dsl::users};
-    users
-        .filter(columns::email.eq(email))
-        .first(conn)
-        .optional()?
-        .ok_or(Error::UserNotFound)
-}
-
 pub fn login_with_password(conn: &DbConn, email: &str, password: &str) -> Result<User> {
-    let user: User = get_user_by_email(conn, email)?;
+    let user = User::find_by_email(conn, email)?;
     let hash = PasswordHash::new(&user.hash).expect("failed to parse hash");
 
     verify_password(password.as_bytes(), &hash)?;

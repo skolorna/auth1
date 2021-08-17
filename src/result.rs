@@ -3,7 +3,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("database error")]
+    #[error("database error: {0}")]
     DieselError(#[from] diesel::result::Error),
 
     #[error("failed to compose email")]
@@ -27,8 +27,8 @@ pub enum Error {
     #[error("malformed token")]
     MalformedToken,
 
-    #[error("missing or invalid token")]
-    MissingOrMalformedToken,
+    #[error("the token is missing or cannot be parsed")]
+    MissingToken,
 
     #[error("email delivery failed")]
     SmtpError(#[from] lettre::smtp::error::Error),
@@ -59,7 +59,7 @@ impl ResponseError for Error {
             }
             EmailInUse => StatusCode::CONFLICT,
             UserNotFound => StatusCode::NOT_FOUND,
-            MissingOrMalformedToken => StatusCode::UNAUTHORIZED,
+            MissingToken => StatusCode::UNAUTHORIZED,
             MalformedToken => StatusCode::BAD_REQUEST,
             EmailFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
             SmtpError(_) => StatusCode::INTERNAL_SERVER_ERROR,

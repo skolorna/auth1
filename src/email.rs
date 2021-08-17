@@ -4,7 +4,7 @@ use lettre::{
 };
 use lettre_email::{EmailBuilder, Mailbox};
 
-use crate::result::Result;
+use crate::{result::Result, token::VerificationToken, DbConn};
 
 const FROM: (&str, &str) = ("system@skolorna.com", "Skolorna");
 const REPLY_TO: &str = "hej@skolorna.com";
@@ -59,17 +59,30 @@ pub fn send_email(
     Ok(())
 }
 
-pub fn send_email_confirmation(smtp: &SmtpConnSpec, mailbox: impl Into<Mailbox>) -> Result<()> {
+pub fn send_welcome_email(
+    db_conn: &DbConn,
+    smtp: &SmtpConnSpec,
+    mailbox: impl Into<Mailbox>,
+) -> Result<()> {
+    let mailbox: Mailbox = mailbox.into();
+    let token = VerificationToken::generate(db_conn, &mailbox.address)?;
+
+    println!("generated token: {}", token);
+
+    // FIXME: Don't use localhost...
     send_email(
         smtp,
         mailbox,
         "Bekräfta din e-postadress".into(),
-        r#"Välkommen till Skolorna!
-
+        format!(
+            "\
+Välkommen till Skolorna!
+            
 Tryck på länken nedan för att bekräfta din e-postadress:
-
-https://www.youtube.com/watch?v=dQw4w9WgXcQ"#
-            .into(),
+                        
+http://localhost:8000/verify?token={}",
+            token
+        ),
     )?;
 
     Ok(())

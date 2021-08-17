@@ -1,13 +1,15 @@
 use std::{fmt::Display, str::FromStr};
 
+use crate::diesel::QueryDsl;
 use base64::URL_SAFE_NO_PAD;
-use diesel::{QueryDsl, RunQueryDsl};
-use jsonwebtoken::{Algorithm, DecodingKey, Validation};
+use chrono::{Duration, Utc};
+use diesel::prelude::*;
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    models::{key::KeyId, user::UserId},
+    models::{session::SessionId, user::UserId, Session},
     result::{Error, Result},
     DbConn,
 };
@@ -50,12 +52,17 @@ impl RefreshToken {
         Aes256Gcm::new(key)
     }
 
+    // FIXME
+    pub fn aes_nonce(&self) -> &[u8] {
+        &self.as_bytes()[32..]
+    }
+
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         use aes_gcm::aead::Aead;
         use aes_gcm::Nonce;
 
         let cipher = self.aes_cipher();
-        let nonce = Nonce::from_slice(&self.as_bytes()[32..]); // FIXME
+        let nonce = Nonce::from_slice(self.aes_nonce());
         let ciphertext = cipher.encrypt(nonce, plaintext.as_ref())?;
 
         Ok(ciphertext)
@@ -66,7 +73,7 @@ impl RefreshToken {
         use aes_gcm::Nonce;
 
         let cipher = self.aes_cipher();
-        let nonce = Nonce::from_slice(&self.as_bytes()[32..]);
+        let nonce = Nonce::from_slice(self.aes_nonce());
         let plaintext = cipher.decrypt(nonce, ciphertext)?;
 
         Ok(plaintext)
@@ -98,8 +105,6 @@ impl Serialize for RefreshToken {
     }
 }
 
-pub const JWT_ALG: Algorithm = Algorithm::RS256;
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccessToken(String);
 
@@ -113,28 +118,23 @@ pub struct AccessTokenClaims {
 }
 
 impl AccessToken {
+    pub const JWT_ALG: Algorithm = Algorithm::RS256;
+
     pub fn new<S: ToString>(s: S) -> Self {
         Self(s.to_string())
     }
 
     pub fn verify_and_decode(&self, conn: &DbConn) -> Result<AccessTokenClaims> {
-        use crate::schema::keys::{columns, table};
         let header = jsonwebtoken::decode_header(&self.0)?;
-        let kid: KeyId = header
+        let kid: SessionId = header
             .kid
             .ok_or(Error::MalformedToken)?
             .parse()
             .map_err(|_| Error::MalformedToken)?;
-        // FIXME: Check for expiration
-        let (pubkey, key_owner): (Vec<u8>, UserId) = table
-            .select((columns::public_key, columns::sub))
-            .find(kid)
-            .first(conn)?;
-
-        let key = DecodingKey::from_rsa_pem(&pubkey).expect("bruh momento");
-        let validation = Validation::new(JWT_ALG);
-        let decoded =
-            jsonwebtoken::decode::<AccessTokenClaims>(&self.0, &key, &validation).expect("bruh");
+        let (key, key_owner) = Session::get_pubkey(conn, kid)?;
+        let key = DecodingKey::from_rsa_pem(&key)?;
+        let validation = Validation::new(Self::JWT_ALG);
+        let decoded = jsonwebtoken::decode::<AccessTokenClaims>(&self.0, &key, &validation)?;
 
         if key_owner != decoded.claims.sub {
             // Something fishy is going on.
@@ -143,4 +143,76 @@ impl AccessToken {
 
         Ok(decoded.claims)
     }
+}
+
+/// Token used for verifying (only email addresses for now).
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VerificationToken(String);
+
+impl VerificationToken {
+    const JWT_ALG: Algorithm = Algorithm::HS256;
+
+    pub fn new(s: impl ToString) -> Self {
+        Self(s.to_string())
+    }
+
+    pub fn generate(conn: &DbConn, email: impl ToString) -> Result<Self> {
+        use crate::schema::users::{columns, table};
+
+        let email = email.to_string();
+        let hash: String = table
+            .select(columns::hash)
+            .filter(columns::email.eq(&email))
+            .first(conn)?;
+        // FIXME: Don't use the password hash as the secret. Please.
+        let key = EncodingKey::from_secret(hash.as_bytes());
+        let exp = Utc::now() + Duration::hours(24);
+        let header = Header::new(Self::JWT_ALG);
+        let claims = VerificationTokenClaims {
+            email,
+            exp: exp.timestamp(),
+        };
+        let token = jsonwebtoken::encode(&header, &claims, &key)?;
+
+        Ok(Self::new(token))
+    }
+
+    pub fn verify(&self, conn: &DbConn) -> Result<()> {
+        use crate::schema::users::{columns, table};
+
+        let data = jsonwebtoken::dangerous_insecure_decode::<VerificationTokenClaims>(&self.0)?;
+        let (hash, already_verified): (String, bool) = table
+            .select((columns::hash, columns::email_verified))
+            .filter(columns::email.eq(data.claims.email))
+            .first(conn)?;
+
+        if already_verified {
+            return Err(Error::InvalidCredentials);
+        }
+
+        let key = DecodingKey::from_secret(hash.as_bytes());
+        let data = jsonwebtoken::decode::<VerificationTokenClaims>(
+            &self.0,
+            &key,
+            &Validation::new(Self::JWT_ALG),
+        )?;
+
+        diesel::update(table.filter(columns::email.eq(data.claims.email)))
+            .set(columns::email_verified.eq(true))
+            .execute(conn)?;
+
+        Ok(())
+    }
+}
+
+impl Display for VerificationToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VerificationTokenClaims {
+    pub exp: i64,
+    pub email: String,
 }

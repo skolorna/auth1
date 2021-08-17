@@ -9,7 +9,7 @@ use crate::{
 
 use actix_web::{http::header::Header, web, FromRequest};
 use actix_web_httpauth::headers::authorization::{Authorization, Bearer};
-use diesel::{QueryDsl, RunQueryDsl};
+use diesel::prelude::*;
 use futures_util::Future;
 
 /// An extractor for Actix Web that ensures that the user is properly authenticated.
@@ -30,7 +30,7 @@ impl FromRequest for Identity {
                 let bearer = authorization.into_scheme();
                 AccessToken::new(bearer.token())
             }
-            Err(_) => return Box::pin(async { Err(Error::MissingOrMalformedToken) }),
+            Err(_) => return Box::pin(async { Err(Error::MissingToken) }),
         };
 
         let pool = req.app_data::<web::Data<DbPool>>().unwrap().clone();

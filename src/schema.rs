@@ -1,16 +1,17 @@
 table! {
-    keys (id) {
-        id -> Int4,
-        sub -> Int4,
+    sessions (id) {
+        id -> Uuid,
+        sub -> Uuid,
         public_key -> Bytea,
         private_key -> Bytea,
-        iat -> Timestamptz,
+        started -> Timestamptz,
+        exp -> Timestamptz,
     }
 }
 
 table! {
     users (id) {
-        id -> Int4,
+        id -> Uuid,
         email -> Varchar,
         email_verified -> Bool,
         hash -> Text,
@@ -18,6 +19,6 @@ table! {
     }
 }
 
-joinable!(keys -> users (sub));
+joinable!(sessions -> users (sub));
 
-allow_tables_to_appear_in_same_query!(keys, users,);
+allow_tables_to_appear_in_same_query!(sessions, users,);
