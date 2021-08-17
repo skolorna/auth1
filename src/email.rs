@@ -17,6 +17,7 @@ pub struct SmtpConnSpec {
 }
 
 impl SmtpConnSpec {
+    #[must_use]
     pub fn new(host: String, username: String, password: String) -> Self {
         Self {
             host,
@@ -25,6 +26,7 @@ impl SmtpConnSpec {
         }
     }
 
+    #[must_use]
     pub fn create_transport(&self) -> SmtpTransport {
         let client = SmtpClient::new_simple(&self.host)
             .expect("couldn't create smtp client")
@@ -73,12 +75,12 @@ pub fn send_welcome_email(
     send_email(
         smtp,
         mailbox,
-        "Bekräfta din e-postadress".into(),
+        "Bekr\u{e4}fta din e-postadress".into(),
         format!(
             "\
-Välkommen till Skolorna!
+V\u{e4}lkommen till Skolorna!
             
-Tryck på länken nedan för att bekräfta din e-postadress:
+Tryck p\u{e5} l\u{e4}nken nedan f\u{f6}r att bekr\u{e4}fta din e-postadress:
                         
 http://localhost:8000/verify?token={}",
             token

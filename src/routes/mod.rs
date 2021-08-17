@@ -19,12 +19,12 @@ pub struct HealthResponse {
 // TODO: Check if the database if healthy, too.
 #[get("/health")]
 async fn get_health() -> HttpResponse {
-    HttpResponse::Ok()
+    return HttpResponse::Ok()
         .set(CacheControl(vec![CacheDirective::NoCache]))
         .json(HealthResponse {
             status: "ok".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-        })
+        });
 }
 
 // TODO: MAKE SURE CACHE-CONTROL IS PROPERLY SET FOR ALL ROUTES

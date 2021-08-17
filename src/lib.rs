@@ -27,18 +27,29 @@ use crate::{models::user::NewUser, result::Result};
 pub type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 pub type DbConn = r2d2::PooledConnection<ConnectionManager<PgConnection>>;
 
-pub fn create_pool(database_url: &str) -> DbPool {
-    eprintln!("Connecting to Postgres ...");
+#[macro_use]
+extern crate diesel_migrations;
+
+/// Create a database pool and run the migrations.
+#[must_use]
+pub fn initialize_pool(database_url: &str) -> DbPool {
+    embed_migrations!();
+
+    eprintln!("Connecting to Postgres");
     let manager = ConnectionManager::<PgConnection>::new(database_url);
     let pool = r2d2::Pool::builder()
         .build(manager)
         .expect("failed to create pool");
 
-    eprintln!("Connected!");
+    eprintln!("Running migrations");
+    let conn = pool.get().expect("failed to get connection");
+    embedded_migrations::run_with_output(&conn, &mut std::io::stderr()).expect("migrations failed");
+    println!("Database initialized!");
 
     pool
 }
 
+#[non_exhaustive]
 #[derive(Debug, Deserialize)]
 pub struct CreateUser {
     pub email: String,
@@ -49,7 +60,7 @@ pub fn create_user(conn: &DbConn, query: CreateUser) -> Result<User> {
     use crate::schema::users;
 
     let email = EmailAddress::from_str(&query.email).map_err(|_| Error::InvalidEmail)?;
-    let hash = hash_password(query.password.as_bytes());
+    let hash = hash_password(query.password.as_bytes())?;
 
     let new_user = NewUser {
         id: Uuid::new_v4(),
@@ -76,9 +87,12 @@ pub fn create_user(conn: &DbConn, query: CreateUser) -> Result<User> {
 /// use auth1::hash_password;
 ///
 /// let p = b"gru";
-/// assert_ne!(hash_password(p), hash_password(p));
+/// assert_ne!(hash_password(p).unwrap(), hash_password(p).unwrap());
 /// ```
-pub fn hash_password(password: &[u8]) -> String {
+///
+/// # Errors
+/// The function throws an error if the hashing fails.
+pub fn hash_password(password: &[u8]) -> Result<String> {
     use pbkdf2::{
         password_hash::{PasswordHasher, SaltString},
         Pbkdf2,
@@ -89,8 +103,8 @@ pub fn hash_password(password: &[u8]) -> String {
 
     Pbkdf2
         .hash_password_simple(password, &salt)
-        .unwrap()
-        .to_string()
+        .map(|h| h.to_string())
+        .map_err(|_| Error::InternalError)
 }
 
 /// Verify a password.
@@ -105,18 +119,22 @@ pub fn hash_password(password: &[u8]) -> String {
 /// assert!(verify_password(password, &parsed_hash).is_ok());
 /// assert!(verify_password(b"dontpwnme", &parsed_hash).is_err());
 /// ```
+///
+/// # Errors
+/// Throws an erorr if the password is wrong.
 pub fn verify_password(
     password: &[u8],
     hash: &pbkdf2::password_hash::PasswordHash,
 ) -> core::result::Result<(), pbkdf2::password_hash::Error> {
-    pbkdf2::Pbkdf2.verify_password(password, hash)
+    return pbkdf2::Pbkdf2.verify_password(password, hash);
 }
 
+/// Login using email and password.
 pub fn login_with_password(conn: &DbConn, email: &str, password: &str) -> Result<User> {
     let user = User::find_by_email(conn, email)?;
     let hash = PasswordHash::new(&user.hash).expect("failed to parse hash");
 
     verify_password(password.as_bytes(), &hash)?;
 
-    Ok(user)
+    return Ok(user);
 }

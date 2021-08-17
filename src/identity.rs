@@ -21,7 +21,7 @@ pub struct Identity {
 
 impl FromRequest for Identity {
     type Error = Error;
-    type Future = Pin<Box<dyn Future<Output = core::result::Result<Identity, Error>>>>;
+    type Future = Pin<Box<dyn Future<Output = core::result::Result<Self, Error>>>>;
     type Config = ();
 
     fn from_request(req: &actix_web::HttpRequest, _: &mut actix_web::dev::Payload) -> Self::Future {
@@ -43,7 +43,7 @@ impl FromRequest for Identity {
             let user_id = claims.sub;
             let user: User = web::block(move || users::table.find(user_id).first(&conn)).await?;
 
-            Ok(Identity { user, claims })
+            return Ok(Self { user, claims });
         })
     }
 }

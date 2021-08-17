@@ -42,14 +42,20 @@ pub enum Error {
 
 impl ResponseError for Error {
     fn status_code(&self) -> actix_web::http::StatusCode {
-        use Error::*;
+        use Error::{
+            DieselError, EmailFailed, EmailInUse, InternalError, InvalidCredentials, InvalidEmail,
+            KeyNotFound, MalformedToken, MissingToken, SmtpError, UniqueViolation, UserNotFound,
+        };
 
         match self {
             InvalidCredentials => StatusCode::FORBIDDEN,
             UniqueViolation => StatusCode::CONFLICT,
             InternalError => StatusCode::INTERNAL_SERVER_ERROR,
             DieselError(ref err) => {
-                use diesel::result::{DatabaseErrorKind, Error::*};
+                use diesel::result::{
+                    DatabaseErrorKind,
+                    Error::{DatabaseError, NotFound},
+                };
 
                 match err {
                     DatabaseError(DatabaseErrorKind::UniqueViolation, _) => StatusCode::CONFLICT,
@@ -87,9 +93,9 @@ impl From<r2d2::Error> for Error {
     }
 }
 
-impl<E: std::fmt::Debug + Into<Error>> From<actix_web::error::BlockingError<E>> for Error {
+impl<E: std::fmt::Debug + Into<Self>> From<actix_web::error::BlockingError<E>> for Error {
     fn from(err: actix_web::error::BlockingError<E>) -> Self {
-        use actix_web::error::BlockingError::*;
+        use actix_web::error::BlockingError::{Canceled, Error};
 
         match err {
             Error(e) => e.into(),
@@ -100,8 +106,10 @@ impl<E: std::fmt::Debug + Into<Error>> From<actix_web::error::BlockingError<E>> 
 
 impl From<jsonwebtoken::errors::Error> for Error {
     fn from(err: jsonwebtoken::errors::Error) -> Self {
-        use self::Error::*;
-        use jsonwebtoken::errors::ErrorKind::*;
+        use self::Error::{InternalError, InvalidCredentials, MalformedToken};
+        use jsonwebtoken::errors::ErrorKind::{
+            ExpiredSignature, InvalidEcdsaKey, InvalidRsaKey, InvalidSignature, InvalidToken,
+        };
 
         match err.kind() {
             InvalidToken => MalformedToken,

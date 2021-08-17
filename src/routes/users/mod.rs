@@ -18,7 +18,7 @@ use crate::{
 #[deprecated(note = "do not deploy")]
 #[get("")]
 async fn list_users(pool: web::Data<DbPool>) -> Result<HttpResponse> {
-    use crate::schema::users::dsl::*;
+    use crate::schema::users::dsl::users;
 
     let conn = pool.get()?;
     let res = web::block(move || users.load::<User>(&conn)).await?;

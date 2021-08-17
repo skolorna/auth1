@@ -26,24 +26,29 @@ const REFRESH_TOKEN_SIZE: usize = 44;
 pub struct RefreshToken([u8; REFRESH_TOKEN_SIZE]);
 
 impl RefreshToken {
+    #[must_use]
     pub fn new(d: [u8; REFRESH_TOKEN_SIZE]) -> Self {
         Self(d)
     }
 
+    #[must_use]
     pub fn generate() -> Self {
-        let mut token = [0u8; REFRESH_TOKEN_SIZE];
+        let mut token = [0_u8; REFRESH_TOKEN_SIZE];
         OsRng.fill_bytes(&mut token);
-        RefreshToken::new(token)
+        return Self::new(token);
     }
 
+    #[must_use]
     pub fn to_base64(&self) -> String {
         base64::encode_config(self.0, URL_SAFE_NO_PAD)
     }
 
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8; REFRESH_TOKEN_SIZE] {
         &self.0
     }
 
+    #[must_use]
     pub fn aes_cipher(&self) -> aes_gcm::Aes256Gcm {
         use aes_gcm::aead::NewAead;
         use aes_gcm::{Aes256Gcm, Key};
@@ -53,8 +58,9 @@ impl RefreshToken {
     }
 
     // FIXME
+    #[must_use]
     pub fn aes_nonce(&self) -> &[u8] {
-        &self.as_bytes()[32..]
+        return &self.as_bytes()[32..];
     }
 
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
@@ -84,7 +90,7 @@ impl FromStr for RefreshToken {
     type Err = base64::DecodeError;
 
     fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
-        let mut d = [0u8; REFRESH_TOKEN_SIZE];
+        let mut d = [0_u8; REFRESH_TOKEN_SIZE];
         base64::decode_config_slice(s, URL_SAFE_NO_PAD, &mut d)?;
         Ok(Self::new(d))
     }
@@ -92,7 +98,7 @@ impl FromStr for RefreshToken {
 
 impl Display for RefreshToken {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_base64())
+        return write!(f, "{}", self.to_base64());
     }
 }
 
@@ -207,7 +213,7 @@ impl VerificationToken {
 
 impl Display for VerificationToken {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        return write!(f, "{}", self.0);
     }
 }
 

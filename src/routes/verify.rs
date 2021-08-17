@@ -19,9 +19,9 @@ async fn verify_email(
     let conn = pool.get()?;
     info.token.verify(&conn)?;
 
-    Ok(HttpResponse::NoContent()
+    Ok(HttpResponse::Ok()
         .set(CacheControl(vec![CacheDirective::NoCache]))
-        .body(""))
+        .body("success"))
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
