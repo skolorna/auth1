@@ -9,16 +9,17 @@ pub mod token;
 #[macro_use]
 extern crate diesel;
 
-use std::str::FromStr;
-
 use diesel::{
     r2d2::{self, ConnectionManager},
     PgConnection, RunQueryDsl,
 };
+use email::SmtpConnSpec;
 use lettre::EmailAddress;
 use models::User;
 use pbkdf2::password_hash::{PasswordHash, PasswordVerifier};
 use serde::Deserialize;
+use std::env;
+use std::str::FromStr;
 use uuid::Uuid;
 
 use crate::result::Error;
@@ -137,4 +138,49 @@ pub fn login_with_password(conn: &DbConn, email: &str, password: &str) -> Result
     verify_password(password.as_bytes(), &hash)?;
 
     Ok(user)
+}
+
+#[derive(Clone)]
+pub struct Data {
+    pub pool: DbPool,
+    pub smtp: SmtpConnSpec,
+}
+
+impl Data {
+    pub fn from_env() -> Self {
+        let database_url = env::var("DATABASE_URL").expect("DATABASE_URL is not set");
+
+        let smtp_host = env::var("SMTP_HOST").expect("SMTP_HOST is not set");
+        let smtp_username = env::var("SMTP_USERNAME").expect("SMTP_USERNAME is not set");
+        let smtp_password = env::var("SMTP_PASSWORD").expect("SMTP_PASSWORD is not set");
+        let smtp_spec = SmtpConnSpec::new(smtp_host, smtp_username, smtp_password);
+
+        Self {
+            smtp: smtp_spec,
+            pool: initialize_pool(&database_url),
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! create_app {
+    ($data:expr) => {{
+        use actix_web::middleware::{normalize, Logger};
+        use actix_web::{web, App};
+
+        let auth1::Data { pool, smtp } = $data;
+
+        App::new()
+            .data(pool)
+            .data(smtp)
+            .app_data(
+                web::JsonConfig::default()
+                    .error_handler(|err, _req| actix_web::error::ErrorBadRequest(err)),
+            )
+            .wrap(normalize::NormalizePath::new(
+                normalize::TrailingSlash::Trim,
+            ))
+            .configure(auth1::routes::configure)
+            .wrap(Logger::default())
+    }};
 }
