@@ -1,5 +1,5 @@
 use actix_web::{http::StatusCode, test};
-use auth1::{create_app, Data};
+use auth1::{create_app, email::SmtpConnSpec, initialize_pool, Data};
 use dotenv::dotenv;
 use serde_json::Value;
 use std::env;
@@ -10,7 +10,10 @@ impl Server {
     pub fn new() -> Self {
         dotenv().ok();
 
-        Self(Data::from_env())
+        Self(Data {
+            pool: initialize_pool(&env::var("DATABASE_URL").unwrap()),
+            smtp: SmtpConnSpec::Testing,
+        })
     }
 
     pub async fn post(&self, url: impl AsRef<str>, body: Value) -> (Vec<u8>, StatusCode) {

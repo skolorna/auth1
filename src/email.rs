@@ -1,6 +1,8 @@
+use std::env;
+
 use lettre::{
     smtp::authentication::{Credentials, Mechanism},
-    SmtpClient, SmtpTransport, Transport,
+    SendableEmail, SmtpClient, Transport,
 };
 use lettre_email::{EmailBuilder, Mailbox};
 
@@ -10,33 +12,42 @@ const FROM: (&str, &str) = ("system@skolorna.com", "Skolorna");
 const REPLY_TO: &str = "hej@skolorna.com";
 
 #[derive(Debug, Clone)]
-pub struct SmtpConnSpec {
-    host: String,
-    username: String,
-    password: String,
+pub enum SmtpConnSpec {
+    BasicAuth {
+        host: String,
+        username: String,
+        password: String,
+    },
+    Testing,
 }
 
 impl SmtpConnSpec {
-    #[must_use]
-    pub fn new(host: String, username: String, password: String) -> Self {
-        Self {
-            host,
-            username,
-            password,
+    pub fn from_env() -> Self {
+        Self::BasicAuth {
+            host: env::var("SMTP_HOST").expect("SMTP_HOST is not set"),
+            username: env::var("SMTP_USERNAME").expect("SMTP_USERNAME is not set"),
+            password: env::var("SMTP_PASSWORD").expect("SMTP_PASSWORD is not set"),
         }
     }
 
-    #[must_use]
-    pub fn create_transport(&self) -> SmtpTransport {
-        let client = SmtpClient::new_simple(&self.host)
-            .expect("couldn't create smtp client")
-            .authentication_mechanism(Mechanism::Plain)
-            .credentials(Credentials::new(
-                self.username.clone(),
-                self.password.clone(),
-            ));
+    pub fn send(&self, email: SendableEmail) -> Result<()> {
+        match self {
+            SmtpConnSpec::BasicAuth {
+                host,
+                username,
+                password,
+            } => {
+                let client = SmtpClient::new_simple(host)
+                    .expect("couldn't create smtp client")
+                    .authentication_mechanism(Mechanism::Plain)
+                    .credentials(Credentials::new(username.clone(), password.clone()));
 
-        client.transport()
+                client.transport().send(email)?;
+
+                Ok(())
+            }
+            SmtpConnSpec::Testing => Ok(()),
+        }
     }
 }
 
@@ -54,9 +65,7 @@ pub fn send_email(
         .text(text)
         .build()?;
 
-    let mut transport = smtp.create_transport();
-
-    transport.send(email.into())?;
+    smtp.send(email.into())?;
 
     Ok(())
 }

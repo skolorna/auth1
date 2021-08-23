@@ -150,13 +150,8 @@ impl Data {
     pub fn from_env() -> Self {
         let database_url = env::var("DATABASE_URL").expect("DATABASE_URL is not set");
 
-        let smtp_host = env::var("SMTP_HOST").expect("SMTP_HOST is not set");
-        let smtp_username = env::var("SMTP_USERNAME").expect("SMTP_USERNAME is not set");
-        let smtp_password = env::var("SMTP_PASSWORD").expect("SMTP_PASSWORD is not set");
-        let smtp_spec = SmtpConnSpec::new(smtp_host, smtp_username, smtp_password);
-
         Self {
-            smtp: smtp_spec,
+            smtp: SmtpConnSpec::from_env(),
             pool: initialize_pool(&database_url),
         }
     }
