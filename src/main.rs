@@ -1,7 +1,7 @@
 use std::{env, net::SocketAddr};
 
 use actix_web::middleware::{normalize, Logger};
-use actix_web::{App, HttpServer};
+use actix_web::{web, App, HttpServer};
 use auth1::{email::SmtpConnSpec, initialize_pool};
 use dotenv::dotenv;
 
@@ -26,6 +26,10 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .data(pool.clone())
             .data(smtp_spec.clone())
+            .app_data(
+                web::JsonConfig::default()
+                    .error_handler(|err, _req| actix_web::error::ErrorBadRequest(err)),
+            )
             .wrap(normalize::NormalizePath::new(
                 normalize::TrailingSlash::Trim,
             ))

@@ -13,7 +13,7 @@ table! {
     users (id) {
         id -> Uuid,
         email -> Varchar,
-        email_verified -> Bool,
+        verified -> Bool,
         hash -> Text,
         created_at -> Timestamptz,
     }

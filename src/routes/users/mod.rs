@@ -5,26 +5,13 @@ use actix_web::{
     http::header::{CacheControl, CacheDirective},
     post, web, HttpResponse,
 };
-use diesel::prelude::*;
 
 use crate::{
     email::{send_welcome_email, SmtpConnSpec},
     identity::Identity,
-    models::User,
     result::{Error, Result},
     CreateUser, DbPool,
 };
-
-#[deprecated(note = "do not deploy")]
-#[get("")]
-async fn list_users(pool: web::Data<DbPool>) -> Result<HttpResponse> {
-    use crate::schema::users::dsl::users;
-
-    let conn = pool.get()?;
-    let res = web::block(move || users.load::<User>(&conn)).await?;
-
-    Ok(HttpResponse::Ok().json(res))
-}
 
 #[post("")]
 async fn create_user(
@@ -46,15 +33,12 @@ async fn create_user(
 }
 
 #[get("/@me")]
-async fn get_me(ident: Identity) -> HttpResponse {
-    HttpResponse::Ok().json(ident.user)
+async fn get_me(ident: Identity) -> Result<HttpResponse> {
+    Ok(HttpResponse::Ok().json(ident.user))
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(list_users)
-        .service(create_user)
+    cfg.service(create_user)
         .service(get_me)
-        // TODO: Add some fancy extractor that can automatically infer @me
-        // as the user currently logged in.
         .service(web::scope("/@me/sessions").configure(sessions::configure));
 }

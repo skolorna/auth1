@@ -13,6 +13,8 @@ use diesel::prelude::*;
 use futures_util::Future;
 
 /// An extractor for Actix Web that ensures that the user is properly authenticated.
+/// Make sure to include `{user}` in the path in order for this extractor to correctly
+/// extract `target`.
 #[derive(Debug)]
 pub struct Identity {
     pub user: User,
@@ -43,7 +45,7 @@ impl FromRequest for Identity {
             let user_id = claims.sub;
             let user: User = web::block(move || users::table.find(user_id).first(&conn)).await?;
 
-            return Ok(Self { user, claims });
+            Ok(Self { user, claims })
         })
     }
 }

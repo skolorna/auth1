@@ -30,7 +30,7 @@ pub type DbConn = r2d2::PooledConnection<ConnectionManager<PgConnection>>;
 #[macro_use]
 extern crate diesel_migrations;
 
-/// Create a database pool and run the migrations.
+/// Create a database pool and run the necessary migrations.
 #[must_use]
 pub fn initialize_pool(database_url: &str) -> DbPool {
     embed_migrations!();
@@ -107,13 +107,13 @@ pub fn hash_password(password: &[u8]) -> Result<String> {
         .map_err(|_| Error::InternalError)
 }
 
-/// Verify a password.
+/// Compare a password against a hashed value.
 /// ```
 /// use pbkdf2::password_hash::PasswordHash;
 /// use auth1::{hash_password, verify_password};
 ///
 /// let password = b"d0ntpwnme";
-/// let hash = hash_password(password);
+/// let hash = hash_password(password).unwrap();
 /// let parsed_hash = PasswordHash::new(&hash).unwrap();
 ///
 /// assert!(verify_password(password, &parsed_hash).is_ok());
@@ -121,12 +121,12 @@ pub fn hash_password(password: &[u8]) -> Result<String> {
 /// ```
 ///
 /// # Errors
-/// Throws an erorr if the password is wrong.
+/// Throws an error if the password is wrong.
 pub fn verify_password(
     password: &[u8],
     hash: &pbkdf2::password_hash::PasswordHash,
 ) -> core::result::Result<(), pbkdf2::password_hash::Error> {
-    return pbkdf2::Pbkdf2.verify_password(password, hash);
+    pbkdf2::Pbkdf2.verify_password(password, hash)
 }
 
 /// Login using email and password.
@@ -136,5 +136,5 @@ pub fn login_with_password(conn: &DbConn, email: &str, password: &str) -> Result
 
     verify_password(password.as_bytes(), &hash)?;
 
-    return Ok(user);
+    Ok(user)
 }

@@ -1,3 +1,5 @@
+//! Everything tokens: access tokens, refresh tokens and even verification tokens!
+
 use std::{fmt::Display, str::FromStr};
 
 use crate::diesel::QueryDsl;
@@ -35,7 +37,7 @@ impl RefreshToken {
     pub fn generate() -> Self {
         let mut token = [0_u8; REFRESH_TOKEN_SIZE];
         OsRng.fill_bytes(&mut token);
-        return Self::new(token);
+        Self::new(token)
     }
 
     #[must_use]
@@ -188,7 +190,7 @@ impl VerificationToken {
 
         let data = jsonwebtoken::dangerous_insecure_decode::<VerificationTokenClaims>(&self.0)?;
         let (hash, already_verified): (String, bool) = table
-            .select((columns::hash, columns::email_verified))
+            .select((columns::hash, columns::verified))
             .filter(columns::email.eq(data.claims.email))
             .first(conn)?;
 
@@ -204,7 +206,7 @@ impl VerificationToken {
         )?;
 
         diesel::update(table.filter(columns::email.eq(data.claims.email)))
-            .set(columns::email_verified.eq(true))
+            .set(columns::verified.eq(true))
             .execute(conn)?;
 
         Ok(())

@@ -12,7 +12,7 @@ pub type UserId = Uuid;
 pub struct User {
     pub id: UserId,
     pub email: String,
-    pub email_verified: bool,
+    pub verified: bool,
     pub hash: String,
     pub created_at: DateTime<Utc>,
 }
@@ -39,7 +39,7 @@ pub struct NewUser<'a> {
 struct JsonUser {
     id: UserId,
     email: String,
-    email_verified: bool,
+    verified: bool,
     created_at: DateTime<Utc>,
 }
 
@@ -48,7 +48,7 @@ impl From<User> for JsonUser {
         let User {
             id,
             email,
-            email_verified,
+            verified,
             created_at,
             ..
         } = u;
@@ -56,7 +56,7 @@ impl From<User> for JsonUser {
         Self {
             id,
             email,
-            email_verified,
+            verified,
             created_at,
         }
     }
@@ -75,7 +75,7 @@ mod tests {
             created_at: DateTime::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc),
             id: Uuid::nil(),
             email: "user@example.com".into(),
-            email_verified: true,
+            verified: true,
             hash: "quite secret; do not share".into(),
         };
 
@@ -83,7 +83,7 @@ mod tests {
         let expected = json!({
             "id": Uuid::nil(),
             "email": "user@example.com",
-            "email_verified": true,
+            "verified": true,
             "created_at": "1970-01-01T00:00:00Z"
         });
 

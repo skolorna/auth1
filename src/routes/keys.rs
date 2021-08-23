@@ -6,7 +6,7 @@ use crate::models::Session;
 use crate::result::Result;
 use crate::DbPool;
 
-#[get("/{id}.pub")]
+#[get("/{id}")]
 async fn get_pubkey(
     pool: web::Data<DbPool>,
     web::Path(id): web::Path<SessionId>,
@@ -16,7 +16,7 @@ async fn get_pubkey(
     let pem = String::from_utf8(pem).expect("invalid utf8 in pubkey");
 
     // Is it really PEM? 🤔
-    assert!(pem.starts_with("-----BEGIN PUBLIC KEY-----"));
+    debug_assert!(pem.starts_with("-----BEGIN PUBLIC KEY-----"));
 
     Ok(HttpResponse::Ok()
         .set(CacheControl(vec![CacheDirective::MaxAge(30 * 86400)]))

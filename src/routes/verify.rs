@@ -14,7 +14,7 @@ pub struct VerificationQuery {
 #[get("")]
 async fn verify_email(
     pool: web::Data<DbPool>,
-    web::Query(info): web::Query<VerificationQuery>,
+    info: web::Json<VerificationQuery>,
 ) -> Result<HttpResponse> {
     let conn = pool.get()?;
     info.token.verify(&conn)?;

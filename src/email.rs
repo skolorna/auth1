@@ -82,7 +82,7 @@ V\u{e4}lkommen till Skolorna!
             
 Tryck p\u{e5} l\u{e4}nken nedan f\u{f6}r att bekr\u{e4}fta din e-postadress:
                         
-http://localhost:8000/verify?token={}",
+{}",
             token
         ),
     )?;
