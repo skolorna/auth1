@@ -24,6 +24,8 @@ jobs:
     services:
       postgres:
         image: postgres
+        ports:
+          - 5432:5432
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: auth1
@@ -45,7 +47,7 @@ jobs:
         with:
           command: test
         env:
-          DATABASE_URL: postgres://postgres:postgres@postgres/auth1
+          DATABASE_URL: postgres://postgres:postgres@localhost/auth1
           RUSTFLAGS: "-Z instrument-coverage"
           RUSTDOCFLAGS: "-Z instrument-coverage"
           LLVM_PROFILE_FILE: "coverage/menu_proxy-%p-%m.profraw"
