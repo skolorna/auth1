@@ -1,8 +1,11 @@
-use std::env;
+use std::{
+    env,
+    sync::{Arc, Mutex, MutexGuard},
+};
 
 use lettre::{
     smtp::authentication::{Credentials, Mechanism},
-    SendableEmail, SmtpClient, Transport,
+    Envelope, SendableEmail, SmtpClient, Transport,
 };
 use lettre_email::{EmailBuilder, Mailbox};
 
@@ -11,6 +14,8 @@ use crate::{result::Result, token::VerificationToken, DbConn};
 const FROM: (&str, &str) = ("system@skolorna.com", "Skolorna");
 const REPLY_TO: &str = "hej@skolorna.com";
 
+type TestInbox = Vec<(Envelope, String)>;
+
 #[derive(Debug, Clone)]
 pub enum SmtpConnSpec {
     BasicAuth {
@@ -18,7 +23,7 @@ pub enum SmtpConnSpec {
         username: String,
         password: String,
     },
-    Testing,
+    TestInbox(Arc<Mutex<TestInbox>>),
 }
 
 impl SmtpConnSpec {
@@ -46,7 +51,26 @@ impl SmtpConnSpec {
 
                 Ok(())
             }
-            SmtpConnSpec::Testing => Ok(()),
+            SmtpConnSpec::TestInbox(data) => {
+                let mut inbox = data.lock().unwrap();
+                inbox.push((
+                    email.envelope().to_owned(),
+                    email.message_to_string().unwrap(),
+                ));
+                Ok(())
+            }
+        }
+    }
+
+    pub fn new_test_inbox() -> Self {
+        Self::TestInbox(Arc::new(Mutex::new(vec![])))
+    }
+
+    pub fn get_test_inbox(&self) -> MutexGuard<TestInbox> {
+        if let Self::TestInbox(data) = self {
+            data.lock().unwrap()
+        } else {
+            panic!();
         }
     }
 }

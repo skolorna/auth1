@@ -1,5 +1,5 @@
 use actix_web::http::header::{CacheControl, CacheDirective};
-use actix_web::{get, web, HttpResponse};
+use actix_web::{post, web, HttpResponse};
 use serde::Deserialize;
 
 use crate::result::Result;
@@ -11,7 +11,7 @@ pub struct VerificationQuery {
     token: VerificationToken,
 }
 
-#[get("")]
+#[post("")]
 async fn verify_email(
     pool: web::Data<DbPool>,
     info: web::Json<VerificationQuery>,

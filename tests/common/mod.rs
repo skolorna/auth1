@@ -12,7 +12,7 @@ impl Server {
 
         Self(Data {
             pool: initialize_pool(&env::var("DATABASE_URL").unwrap()),
-            smtp: SmtpConnSpec::Testing,
+            smtp: SmtpConnSpec::new_test_inbox(),
         })
     }
 
@@ -45,5 +45,11 @@ impl Server {
         let body = test::read_body(res).await;
 
         (body.to_vec(), status_code)
+    }
+
+    pub async fn get_json(&self, url: impl AsRef<str>) -> (Value, StatusCode) {
+        let (body, status_code) = self.get(url).await;
+        let response = serde_json::from_slice(&body).unwrap_or_default();
+        (response, status_code)
     }
 }

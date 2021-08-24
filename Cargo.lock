@@ -395,6 +395,7 @@ dependencies = [
  "pbkdf2",
  "r2d2",
  "rand_core 0.6.3",
+ "regex",
  "serde",
  "serde_json",
  "thiserror",
