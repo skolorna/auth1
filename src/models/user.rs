@@ -1,4 +1,4 @@
-use crate::result::Result;
+use crate::result::{Error, Result};
 use crate::{schema::users, DbConn};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
@@ -20,8 +20,13 @@ pub struct User {
 impl User {
     pub fn find_by_email(conn: &DbConn, email: &str) -> Result<Self> {
         use crate::schema::users::{columns, dsl::users};
-        let user = users.filter(columns::email.eq(email)).first(conn)?;
-        Ok(user)
+        users
+            .filter(columns::email.eq(email))
+            .first(conn)
+            .map_err(|e| match e {
+                diesel::result::Error::NotFound => Error::UserNotFound,
+                _ => e.into(),
+            })
     }
 }
 
@@ -67,6 +72,8 @@ mod tests {
     use chrono::NaiveDateTime;
     use serde_json::json;
 
+    use crate::{get_test_conn, result::Error};
+
     use super::*;
 
     #[test]
@@ -89,5 +96,16 @@ mod tests {
 
         assert_eq!(serialized, expected);
         assert_ne!(serialized, json!({"id": 31415})); // Sanity check
+    }
+
+    #[test]
+    fn get_user_by_email() {
+        let conn = get_test_conn();
+
+        match User::find_by_email(&conn, "nonexistentuser@example.com").err() {
+            Some(Error::UserNotFound) => {}
+            Some(other_error) => panic!("incorrect error ({})", other_error),
+            None => panic!("that user should not exist"),
+        }
     }
 }

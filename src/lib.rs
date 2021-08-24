@@ -50,6 +50,18 @@ pub fn initialize_pool(database_url: &str) -> DbPool {
     pool
 }
 
+pub fn get_pool_from_env() -> DbPool {
+    let db_url = env::var("DATABASE_URL").expect("DATABASE_URL is not set");
+
+    initialize_pool(&db_url)
+}
+
+pub fn get_test_conn() -> DbConn {
+    dotenv::dotenv().ok();
+    let pool = get_pool_from_env();
+    pool.get().unwrap()
+}
+
 #[non_exhaustive]
 #[derive(Debug, Deserialize)]
 pub struct CreateUser {
@@ -148,11 +160,9 @@ pub struct Data {
 
 impl Data {
     pub fn from_env() -> Self {
-        let database_url = env::var("DATABASE_URL").expect("DATABASE_URL is not set");
-
         Self {
             smtp: SmtpConnSpec::from_env(),
-            pool: initialize_pool(&database_url),
+            pool: get_pool_from_env(),
         }
     }
 }

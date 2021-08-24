@@ -33,9 +33,6 @@ pub enum Error {
     #[error("email delivery failed")]
     SmtpError(#[from] lettre::smtp::error::Error),
 
-    #[error("something else has the same unique value")]
-    UniqueViolation,
-
     #[error("user not found")]
     UserNotFound,
 }
@@ -44,12 +41,11 @@ impl ResponseError for Error {
     fn status_code(&self) -> actix_web::http::StatusCode {
         use Error::{
             DieselError, EmailFailed, EmailInUse, InternalError, InvalidCredentials, InvalidEmail,
-            KeyNotFound, MalformedToken, MissingToken, SmtpError, UniqueViolation, UserNotFound,
+            KeyNotFound, MalformedToken, MissingToken, SmtpError, UserNotFound,
         };
 
         match self {
             InvalidCredentials => StatusCode::FORBIDDEN,
-            UniqueViolation => StatusCode::CONFLICT,
             InternalError => StatusCode::INTERNAL_SERVER_ERROR,
             DieselError(ref err) => {
                 use diesel::result::{

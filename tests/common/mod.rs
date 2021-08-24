@@ -1,8 +1,7 @@
 use actix_web::{http::StatusCode, test};
-use auth1::{create_app, email::SmtpConnSpec, initialize_pool, Data};
+use auth1::{create_app, email::SmtpConnSpec, get_pool_from_env, Data};
 use dotenv::dotenv;
 use serde_json::Value;
-use std::env;
 
 pub struct Server(pub Data);
 
@@ -11,7 +10,7 @@ impl Server {
         dotenv().ok();
 
         Self(Data {
-            pool: initialize_pool(&env::var("DATABASE_URL").unwrap()),
+            pool: get_pool_from_env(),
             smtp: SmtpConnSpec::new_test_inbox(),
         })
     }

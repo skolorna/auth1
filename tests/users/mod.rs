@@ -10,6 +10,23 @@ use serde_json::{json, Value};
 use crate::common::Server;
 
 #[actix_rt::test]
+async fn get_nonexistent_user() {
+    let server = Server::new();
+
+    let (res, status) = server
+        .post(
+            "/login",
+            json!({
+                "email": "nonexistentuserpleasedontuse@example.com",
+                "password": "perf3ctlÿf1nepassw0rd",
+            }),
+        )
+        .await;
+    dbg!(String::from_utf8_lossy(&res));
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[actix_rt::test]
 async fn create_user_and_login() {
     let server = Server::new();
 
