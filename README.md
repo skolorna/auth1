@@ -1,5 +1,7 @@
 # auth1
 
+[![codecov](https://codecov.io/gh/skolorna/auth1/branch/main/graph/badge.svg?token=0cXNVd3uLC)](https://codecov.io/gh/skolorna/auth1)
+
 auth1 is an auth system.
 
 ## User
