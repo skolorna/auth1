@@ -22,7 +22,6 @@ async fn get_nonexistent_user() {
             }),
         )
         .await;
-    dbg!(String::from_utf8_lossy(&res));
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
@@ -56,6 +55,18 @@ async fn create_user_and_login() {
 
     let me = get_me(&server, &access_token).await;
     assert!(me["verified"].as_bool().unwrap());
+
+    let (res, status) = server
+        .post_json(
+            "/refresh",
+            json!({
+                "token": refresh_token,
+            }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let me = get_me(&server, res["access_token"].as_str().unwrap()).await;
 }
 
 async fn get_me(server: &Server, access_token: &str) -> Value {

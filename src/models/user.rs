@@ -1,7 +1,11 @@
+use std::str::FromStr;
+
+use crate::hash_password;
 use crate::result::{Error, Result};
 use crate::{schema::users, DbConn};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
+use lettre::EmailAddress;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -17,6 +21,13 @@ pub struct User {
     pub created_at: DateTime<Utc>,
 }
 
+#[non_exhaustive]
+#[derive(Debug, Deserialize)]
+pub struct CreateUser {
+    pub email: String,
+    pub password: String,
+}
+
 impl User {
     pub fn find_by_email(conn: &DbConn, email: &str) -> Result<Self> {
         use crate::schema::users::{columns, dsl::users};
@@ -27,6 +38,30 @@ impl User {
                 diesel::result::Error::NotFound => Error::UserNotFound,
                 _ => e.into(),
             })
+    }
+
+    pub fn create(conn: &DbConn, query: CreateUser) -> Result<Self> {
+        let email = EmailAddress::from_str(&query.email).map_err(|_| Error::InvalidEmail)?;
+        let hash = hash_password(query.password.as_bytes())?;
+
+        let new_user = NewUser {
+            id: Uuid::new_v4(),
+            email: &email.to_string(),
+            hash: &hash,
+        };
+
+        let inserted_row = diesel::insert_into(users::table)
+            .values(&new_user)
+            .get_result(conn)
+            .map_err(|err| match err {
+                diesel::result::Error::DatabaseError(
+                    diesel::result::DatabaseErrorKind::UniqueViolation,
+                    _,
+                ) => Error::EmailInUse,
+                _ => err.into(),
+            })?;
+
+        Ok(inserted_row)
     }
 }
 
@@ -102,10 +137,10 @@ mod tests {
     fn get_user_by_email() {
         let conn = get_test_conn();
 
-        match User::find_by_email(&conn, "nonexistentuser@example.com").err() {
-            Some(Error::UserNotFound) => {}
-            Some(other_error) => panic!("incorrect error ({})", other_error),
-            None => panic!("that user should not exist"),
+        match User::find_by_email(&conn, "nonexistentuser@example.com") {
+            Err(Error::UserNotFound) => {}
+            Err(other_error) => panic!("incorrect error ({})", other_error),
+            Ok(_) => panic!("that user should not exist"),
         }
     }
 }

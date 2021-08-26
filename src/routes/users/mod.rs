@@ -9,8 +9,9 @@ use actix_web::{
 use crate::{
     email::{send_welcome_email, SmtpConnSpec},
     identity::Identity,
+    models::{user::CreateUser, User},
     result::{Error, Result},
-    CreateUser, DbPool,
+    DbPool,
 };
 
 #[post("")]
@@ -21,7 +22,7 @@ async fn create_user(
 ) -> Result<HttpResponse> {
     let conn = pool.get()?;
     let created_user = web::block::<_, _, Error>(move || {
-        let created_user = crate::create_user(&conn, data.0)?;
+        let created_user = User::create(&conn, data.0)?;
         send_welcome_email(&conn, smtp.as_ref(), created_user.email.clone())?;
         Ok(created_user)
     })

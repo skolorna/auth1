@@ -4,11 +4,12 @@ use std::{fmt::Display, str::FromStr};
 
 use crate::diesel::QueryDsl;
 use base64::URL_SAFE_NO_PAD;
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use diesel::prelude::*;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use rand_core::{OsRng, RngCore};
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::{
     models::{session::SessionId, user::UserId, Session},
@@ -16,38 +17,31 @@ use crate::{
     DbConn,
 };
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RefreshTokenClaims {
-    pub sub: UserId,
-    pub exp: i64,
+#[derive(Debug, Clone, Copy)]
+pub struct RefreshToken {
+    pub session: SessionId,
+    pub data: [u8; Self::SIZE],
 }
 
-const REFRESH_TOKEN_SIZE: usize = 44;
-
-#[derive(Debug, Clone, Copy)]
-pub struct RefreshToken([u8; REFRESH_TOKEN_SIZE]);
-
 impl RefreshToken {
+    pub const SIZE: usize = 44;
+    const MAX_B64_SIZE: usize = 4 * (Self::SIZE + 2) / 3;
+
     #[must_use]
-    pub fn new(d: [u8; REFRESH_TOKEN_SIZE]) -> Self {
-        Self(d)
+    pub fn new(session: SessionId, data: [u8; Self::SIZE]) -> Self {
+        Self { session, data }
     }
 
     #[must_use]
-    pub fn generate() -> Self {
-        let mut token = [0_u8; REFRESH_TOKEN_SIZE];
-        OsRng.fill_bytes(&mut token);
-        Self::new(token)
+    pub fn generate(session: SessionId) -> Self {
+        let mut data = [0_u8; Self::SIZE];
+        OsRng.fill_bytes(&mut data);
+        Self::new(session, data)
     }
 
     #[must_use]
-    pub fn to_base64(&self) -> String {
-        base64::encode_config(self.0, URL_SAFE_NO_PAD)
-    }
-
-    #[must_use]
-    pub fn as_bytes(&self) -> &[u8; REFRESH_TOKEN_SIZE] {
-        &self.0
+    pub fn as_bytes(&self) -> &[u8; Self::SIZE] {
+        &self.data
     }
 
     #[must_use]
@@ -86,21 +80,96 @@ impl RefreshToken {
 
         Ok(plaintext)
     }
+
+    pub fn sign_access_token_simple(&self, conn: &DbConn) -> Result<AccessToken> {
+        use crate::schema::sessions::{columns, table};
+
+        let (exp, private_key, sub): (_, Vec<u8>, UserId) = table
+            .select((columns::exp, columns::private_key, columns::sub))
+            .find(self.session)
+            .first(conn)?;
+
+        self.sign_access_token(private_key, sub, exp)
+    }
+
+    pub fn sign_access_token(
+        &self,
+        private_key: Vec<u8>,
+        sub: UserId,
+        max_exp: DateTime<Utc>,
+    ) -> Result<AccessToken> {
+        let now = Utc::now();
+        // The access token must not outlive the refresh token
+        let exp = (now + Duration::hours(1)).min(max_exp);
+
+        if exp < now {
+            return Err(Error::InvalidCredentials);
+        }
+
+        let der = self.decrypt(&private_key)?;
+
+        let encoding_key = EncodingKey::from_rsa_der(&der);
+        let header = Header {
+            typ: Some("JWT".into()),
+            alg: AccessToken::JWT_ALG,
+            cty: None,
+            jku: None,
+            kid: Some(self.session.to_string()),
+            x5u: None,
+            x5t: None,
+        };
+        let claims = AccessTokenClaims {
+            sub,
+            exp: exp.timestamp(),
+        };
+
+        let token = jsonwebtoken::encode(&header, &claims, &encoding_key).expect("hm");
+
+        Ok(AccessToken::new(token))
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum ParseRefreshTokenError {
+    #[error("invalid uuid")]
+    InvalidUuid(#[from] uuid::Error),
+
+    #[error("invalid base64 encoding")]
+    InvalidBase64(#[from] base64::DecodeError),
+
+    #[error("the token is too big")]
+    TooBigToken,
 }
 
 impl FromStr for RefreshToken {
-    type Err = base64::DecodeError;
+    type Err = ParseRefreshTokenError;
 
     fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
-        let mut d = [0_u8; REFRESH_TOKEN_SIZE];
-        base64::decode_config_slice(s, URL_SAFE_NO_PAD, &mut d)?;
-        Ok(Self::new(d))
+        let mut parts = s.splitn(2, '.');
+
+        let session = SessionId::from_str(parts.next().unwrap())?;
+
+        let data_b64 = parts.next().unwrap();
+        if data_b64.len() > Self::MAX_B64_SIZE {
+            // Something fishy is going on, and I dont really want my
+            // base64 decoder to panic today.
+            return Err(ParseRefreshTokenError::TooBigToken);
+        }
+        let mut data = [0_u8; Self::SIZE];
+        base64::decode_config_slice(data_b64, URL_SAFE_NO_PAD, &mut data)?;
+
+        Ok(Self::new(session, data))
     }
 }
 
 impl Display for RefreshToken {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        return write!(f, "{}", self.to_base64());
+        return write!(
+            f,
+            "{}.{}",
+            self.session,
+            base64::encode_config(self.data, URL_SAFE_NO_PAD)
+        );
     }
 }
 
@@ -109,7 +178,17 @@ impl Serialize for RefreshToken {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(&self.to_base64())
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for RefreshToken {
+    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        FromStr::from_str(&s).map_err(de::Error::custom)
     }
 }
 
@@ -223,4 +302,57 @@ impl Display for VerificationToken {
 pub struct VerificationTokenClaims {
     pub exp: i64,
     pub email: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use crate::models::session::SessionId;
+
+    use super::RefreshToken;
+
+    #[test]
+    fn parse_refresh_token() {
+        let wrong = vec![
+            "abcdef.a.b",
+            "abc",
+            ".",
+            "",
+            "2f93d264-9f29-454d-b616-9ba57f95f9cf.🤡", // ah yes, base64
+            // The following key is probably too big.
+            "2f93d264-9f29-454d-b616-9ba57f95f9cf.________________________________________________________________",
+        ];
+
+        for s in wrong {
+            assert!(
+                RefreshToken::from_str(s).is_err(),
+                "uh-oh. \"{}\" should not be considered valid.",
+                s
+            );
+        }
+
+        assert_eq!(
+            RefreshToken::from_str("2f93d264-9f29-454d-b616-9ba57f95f9cf.ASNFZ4mrze8")
+                .unwrap()
+                .data[..8],
+            [0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef]
+        );
+
+        assert_eq!(
+            RefreshToken::from_str("00000000-0000-0000-0000-000000000000.")
+                .unwrap()
+                .session,
+            SessionId::nil()
+        );
+
+        assert!(RefreshToken::from_str("2f93d264-9f29-454d-b616-9ba57f95f9cf.").is_ok());
+    }
+
+    #[test]
+    fn refresh_token_crypto() {
+        let token = RefreshToken::new(SessionId::nil(), [0; 44]);
+        let ciphertext = token.encrypt(b"bruh").unwrap();
+        assert_eq!(token.decrypt(&ciphertext).unwrap(), b"bruh");
+    }
 }

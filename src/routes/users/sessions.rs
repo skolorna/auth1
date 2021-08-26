@@ -1,5 +1,4 @@
 use actix_web::{delete, get, web, HttpResponse};
-
 use diesel::prelude::*;
 
 use crate::{

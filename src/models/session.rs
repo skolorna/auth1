@@ -1,6 +1,5 @@
 use chrono::{DateTime, Duration, Utc};
 use diesel::prelude::*;
-use jsonwebtoken::{EncodingKey, Header};
 use openssl::rsa::Rsa;
 use serde::Serialize;
 use uuid::Uuid;
@@ -9,7 +8,7 @@ use super::user::{User, UserId};
 use crate::{
     result::{Error, Result},
     schema::sessions,
-    token::{AccessToken, AccessTokenClaims, RefreshToken},
+    token::{AccessToken, RefreshToken},
     DbConn,
 };
 
@@ -18,6 +17,9 @@ use crate::{
 /// is deleted followed by a new session with the same id `a` being created.
 pub type SessionId = Uuid;
 
+/// A session contains asymmetric keys used for issuing shorter-lived access tokens.
+/// The private key is encrypted with the refresh token, while the public key is stored
+/// in plaintext and accessible by anyone.
 #[derive(Debug, Queryable, Identifiable, Associations, Serialize)]
 #[belongs_to(User, foreign_key = "sub")]
 pub struct Session {
@@ -38,8 +40,11 @@ pub struct CreatedSession {
 impl Session {
     pub const RSA_BITS: u32 = 2048;
 
+    /// Create a new session for a specific user and insert the session into the
+    /// database. A refresh token is generated and returned.
     pub fn create(conn: &DbConn, sub: UserId) -> Result<CreatedSession> {
-        let refresh_token = RefreshToken::generate();
+        let id = Uuid::new_v4();
+        let refresh_token = RefreshToken::generate(id);
 
         let (public_pem, private_der) = {
             let rsa = Rsa::generate(Self::RSA_BITS).map_err(|_| Error::InternalError)?;
@@ -51,7 +56,7 @@ impl Session {
 
         let now = Utc::now();
         let new_session = NewSession {
-            id: Uuid::new_v4(),
+            id,
             sub,
             started: now,
             exp: now + Duration::days(90),
@@ -61,11 +66,22 @@ impl Session {
 
         let session: Self = diesel::insert_into(sessions::table)
             .values(new_session)
-            .get_result(conn)?;
+            .get_result(conn)
+            .map_err(|e| match e {
+                diesel::result::Error::DatabaseError(
+                    diesel::result::DatabaseErrorKind::ForeignKeyViolation,
+                    _,
+                ) => Error::UserNotFound,
+                _ => e.into(),
+            })?;
 
         Ok(CreatedSession {
             refresh_token,
-            access_token: session.sign_access_token(&refresh_token)?,
+            access_token: refresh_token.sign_access_token(
+                session.private_key,
+                session.sub,
+                session.exp,
+            )?,
         })
     }
 
@@ -75,55 +91,23 @@ impl Session {
     /// the function will pretend that it never existed.
     /// Do note, however, that it shouldn't matter to much whether
     /// the key has expired or not as this public key is exclusively
-    /// used for *validation* of access tokens that themselves have
+    /// used for *validation* of access tokens that in turn have
     /// much shorter lifetimes.
-    pub fn get_pubkey(conn: &DbConn, kid: SessionId) -> Result<(Vec<u8>, UserId)> {
+    pub fn get_pubkey(conn: &DbConn, id: SessionId) -> Result<(Vec<u8>, UserId)> {
         use crate::schema::sessions::{columns, table};
         let (pubkey, exp, sub): (Vec<u8>, DateTime<Utc>, UserId) = table
             .select((columns::public_key, columns::exp, columns::sub))
-            .find(kid)
+            .find(id)
             .first(conn)
             .map_err(|_| Error::KeyNotFound)?;
 
         if exp > Utc::now() {
             Ok((pubkey, sub))
         } else {
-            diesel::delete(table.find(kid)).execute(conn)?;
+            diesel::delete(table.find(id)).execute(conn)?;
 
             Err(Error::KeyNotFound)
         }
-    }
-
-    // TODO: ECC?
-    pub fn sign_access_token(&self, refresh_token: &RefreshToken) -> Result<AccessToken> {
-        let now = Utc::now();
-        // The access token must not outlive the refresh token
-        let exp = (now + Duration::hours(1)).min(self.exp);
-
-        if exp < now {
-            return Err(Error::InvalidCredentials);
-        }
-
-        let der = refresh_token.decrypt(&self.private_key)?;
-
-        let encoding_key = EncodingKey::from_rsa_der(&der);
-        let header = Header {
-            typ: Some("JWT".into()),
-            alg: AccessToken::JWT_ALG,
-            cty: None,
-            jku: None,
-            kid: Some(self.id.to_string()),
-            x5u: None,
-            x5t: None,
-        };
-        let claims = AccessTokenClaims {
-            sub: self.sub,
-            exp: exp.timestamp(),
-        };
-
-        let token = jsonwebtoken::encode(&header, &claims, &encoding_key).expect("hm");
-
-        Ok(AccessToken::new(token))
     }
 }
 
@@ -146,4 +130,24 @@ struct NewSession<'a> {
     private_key: &'a [u8],
     started: DateTime<Utc>,
     exp: DateTime<Utc>,
+}
+
+#[cfg(test)]
+mod tests {
+    use uuid::Uuid;
+
+    use crate::{get_test_conn, result::Error};
+
+    use super::Session;
+
+    #[test]
+    fn issue_access_token() {
+        let conn = get_test_conn();
+
+        match Session::create(&conn, Uuid::nil()) {
+            Err(Error::UserNotFound) => {} // Of course there isn't a nil user
+            Err(other_error) => panic!("wrong error type ({})", other_error),
+            Ok(_) => panic!("this shouldn't work"),
+        }
+    }
 }

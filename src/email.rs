@@ -102,8 +102,6 @@ pub fn send_welcome_email(
     let mailbox: Mailbox = mailbox.into();
     let token = VerificationToken::generate(db_conn, &mailbox.address)?;
 
-    println!("generated token: {}", token);
-
     // FIXME: Don't use localhost...
     send_email(
         smtp,

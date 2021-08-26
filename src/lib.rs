@@ -9,21 +9,16 @@ pub mod token;
 #[macro_use]
 extern crate diesel;
 
+use crate::result::Error;
+use crate::result::Result;
 use diesel::{
     r2d2::{self, ConnectionManager},
-    PgConnection, RunQueryDsl,
+    PgConnection,
 };
 use email::SmtpConnSpec;
-use lettre::EmailAddress;
 use models::User;
 use pbkdf2::password_hash::{PasswordHash, PasswordVerifier};
-use serde::Deserialize;
 use std::env;
-use std::str::FromStr;
-use uuid::Uuid;
-
-use crate::result::Error;
-use crate::{models::user::NewUser, result::Result};
 
 pub type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 pub type DbConn = r2d2::PooledConnection<ConnectionManager<PgConnection>>;
@@ -60,39 +55,6 @@ pub fn get_test_conn() -> DbConn {
     dotenv::dotenv().ok();
     let pool = get_pool_from_env();
     pool.get().unwrap()
-}
-
-#[non_exhaustive]
-#[derive(Debug, Deserialize)]
-pub struct CreateUser {
-    pub email: String,
-    pub password: String,
-}
-
-pub fn create_user(conn: &DbConn, query: CreateUser) -> Result<User> {
-    use crate::schema::users;
-
-    let email = EmailAddress::from_str(&query.email).map_err(|_| Error::InvalidEmail)?;
-    let hash = hash_password(query.password.as_bytes())?;
-
-    let new_user = NewUser {
-        id: Uuid::new_v4(),
-        email: &email.to_string(),
-        hash: &hash,
-    };
-
-    let inserted_row = diesel::insert_into(users::table)
-        .values(&new_user)
-        .get_result(conn)
-        .map_err(|err| match err {
-            diesel::result::Error::DatabaseError(
-                diesel::result::DatabaseErrorKind::UniqueViolation,
-                _,
-            ) => Error::EmailInUse,
-            _ => err.into(),
-        })?;
-
-    Ok(inserted_row)
 }
 
 /// Hash and salt a password.
