@@ -1,4 +1,3 @@
-use actix_web::http::header::{CacheControl, CacheDirective};
 use actix_web::{post, web, HttpResponse};
 use serde::Deserialize;
 
@@ -19,9 +18,7 @@ async fn verify_email(
     let conn = pool.get()?;
     info.token.verify(&conn)?;
 
-    Ok(HttpResponse::Ok()
-        .set(CacheControl(vec![CacheDirective::NoCache]))
-        .body("success"))
+    Ok(HttpResponse::Ok().body("success"))
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {

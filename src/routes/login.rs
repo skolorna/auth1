@@ -1,4 +1,3 @@
-use actix_web::http::header::{CacheControl, CacheDirective};
 use actix_web::{post, web, HttpResponse};
 use serde::Deserialize;
 
@@ -24,9 +23,7 @@ async fn handle_login(
     })
     .await?;
 
-    Ok(HttpResponse::Ok()
-        .set(CacheControl(vec![CacheDirective::NoCache]))
-        .json(res))
+    Ok(HttpResponse::Ok().json(res))
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {

@@ -93,7 +93,7 @@ impl Session {
     /// the key has expired or not as this public key is exclusively
     /// used for *validation* of access tokens that in turn have
     /// much shorter lifetimes.
-    pub fn get_pubkey(conn: &DbConn, id: SessionId) -> Result<(Vec<u8>, UserId)> {
+    pub fn get_pubkey(conn: &DbConn, id: SessionId) -> Result<(Vec<u8>, UserId, DateTime<Utc>)> {
         use crate::schema::sessions::{columns, table};
         let (pubkey, exp, sub): (Vec<u8>, DateTime<Utc>, UserId) = table
             .select((columns::public_key, columns::exp, columns::sub))
@@ -102,7 +102,7 @@ impl Session {
             .map_err(|_| Error::KeyNotFound)?;
 
         if exp > Utc::now() {
-            Ok((pubkey, sub))
+            Ok((pubkey, sub, exp))
         } else {
             diesel::delete(table.find(id)).execute(conn)?;
 

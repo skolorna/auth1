@@ -218,7 +218,7 @@ impl AccessToken {
             .ok_or(Error::MalformedToken)?
             .parse()
             .map_err(|_| Error::MalformedToken)?;
-        let (key, key_owner) = Session::get_pubkey(conn, kid)?;
+        let (key, key_owner, _exp) = Session::get_pubkey(conn, kid)?;
         let key = DecodingKey::from_rsa_pem(&key)?;
         let validation = Validation::new(Self::JWT_ALG);
         let decoded = jsonwebtoken::decode::<AccessTokenClaims>(&self.0, &key, &validation)?;

@@ -21,14 +21,13 @@ pub struct HealthResponse {
 #[get("/health")]
 async fn get_health() -> HttpResponse {
     return HttpResponse::Ok()
-        .set(CacheControl(vec![CacheDirective::NoCache]))
+        .set(CacheControl(vec![CacheDirective::NoStore]))
         .json(HealthResponse {
             status: "ok".into(),
             version: env!("CARGO_PKG_VERSION").into(),
         });
 }
 
-// TODO: MAKE SURE CACHE-CONTROL IS PROPERLY SET FOR ALL ROUTES
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(get_health)
         .service(web::scope("/users").configure(users::configure))

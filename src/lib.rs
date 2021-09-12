@@ -5,6 +5,7 @@ pub mod result;
 pub mod routes;
 pub mod schema;
 pub mod token;
+pub mod util;
 
 #[macro_use]
 extern crate diesel;

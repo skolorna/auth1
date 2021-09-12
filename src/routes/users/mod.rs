@@ -28,14 +28,14 @@ async fn create_user(
     })
     .await?;
 
-    Ok(HttpResponse::Created()
-        .set(CacheControl(vec![CacheDirective::NoCache]))
-        .json(created_user))
+    Ok(HttpResponse::Created().json(created_user))
 }
 
 #[get("/@me")]
 async fn get_me(ident: Identity) -> Result<HttpResponse> {
-    Ok(HttpResponse::Ok().json(ident.user))
+    Ok(HttpResponse::Ok()
+        .set(CacheControl(vec![CacheDirective::Private]))
+        .json(ident.user))
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {

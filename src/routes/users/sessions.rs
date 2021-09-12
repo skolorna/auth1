@@ -1,4 +1,8 @@
-use actix_web::{delete, get, web, HttpResponse};
+use actix_web::{
+    delete, get,
+    http::header::{CacheControl, CacheDirective},
+    web, HttpResponse,
+};
 use diesel::prelude::*;
 
 use crate::{
@@ -21,10 +25,10 @@ async fn list_sessions(pool: web::Data<DbPool>, ident: Identity) -> Result<HttpR
             .load::<SessionInfo>(&conn)
     })
     .await?;
-    // let keys: Vec<Key> = web::block(move || crate::schema::keys::table.load(&conn)).await?;
-    // let res: Vec<String> = keys.into_iter().map(|k| String::from_utf8_lossy(&k.private_key).to_string()).collect();
 
-    Ok(HttpResponse::Ok().json(res))
+    Ok(HttpResponse::Ok()
+        .set(CacheControl(vec![CacheDirective::Private]))
+        .json(res))
 }
 
 #[delete("")]
