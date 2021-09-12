@@ -44,7 +44,7 @@ impl Session {
     /// database. A refresh token is generated and returned.
     pub fn create(conn: &DbConn, sub: UserId) -> Result<CreatedSession> {
         let id = Uuid::new_v4();
-        let refresh_token = RefreshToken::generate(id);
+        let refresh_token = RefreshToken::generate_secret(id);
 
         let (public_pem, private_der) = {
             let rsa = Rsa::generate(Self::RSA_BITS).map_err(|_| Error::InternalError)?;

@@ -17,46 +17,39 @@ use crate::{
     DbConn,
 };
 
+pub type RefreshTokenSecret = [u8; RefreshToken::SECRET_SIZE];
+
 #[derive(Debug, Clone, Copy)]
 pub struct RefreshToken {
     pub session: SessionId,
-    pub data: [u8; Self::SIZE],
+    pub secret: RefreshTokenSecret,
 }
 
 impl RefreshToken {
-    pub const SIZE: usize = 44;
-    const MAX_B64_SIZE: usize = 4 * (Self::SIZE + 2) / 3;
+    pub const SECRET_SIZE: usize = 44;
+    const MAX_B64_SIZE: usize = 4 * (Self::SECRET_SIZE + 2) / 3;
 
-    #[must_use]
-    pub fn new(session: SessionId, data: [u8; Self::SIZE]) -> Self {
-        Self { session, data }
+    pub fn new(session: SessionId, secret: RefreshTokenSecret) -> Self {
+        Self { session, secret }
     }
 
-    #[must_use]
-    pub fn generate(session: SessionId) -> Self {
-        let mut data = [0_u8; Self::SIZE];
+    pub fn generate_secret(session: SessionId) -> Self {
+        let mut data = [0_u8; Self::SECRET_SIZE];
         OsRng.fill_bytes(&mut data);
         Self::new(session, data)
     }
 
-    #[must_use]
-    pub fn as_bytes(&self) -> &[u8; Self::SIZE] {
-        &self.data
-    }
-
-    #[must_use]
-    pub fn aes_cipher(&self) -> aes_gcm::Aes256Gcm {
+    fn aes_cipher(&self) -> aes_gcm::Aes256Gcm {
         use aes_gcm::aead::NewAead;
         use aes_gcm::{Aes256Gcm, Key};
 
-        let key = Key::from_slice(&self.as_bytes()[..32]);
+        let key = Key::from_slice(&self.secret[..32]);
         Aes256Gcm::new(key)
     }
 
     // FIXME
-    #[must_use]
-    pub fn aes_nonce(&self) -> &[u8] {
-        return &self.as_bytes()[32..];
+    fn aes_nonce(&self) -> &[u8] {
+        &self.secret[32..]
     }
 
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
@@ -155,7 +148,7 @@ impl FromStr for RefreshToken {
             // base64 decoder to panic today.
             return Err(ParseRefreshTokenError::TooBigToken);
         }
-        let mut data = [0_u8; Self::SIZE];
+        let mut data = [0_u8; Self::SECRET_SIZE];
         base64::decode_config_slice(data_b64, URL_SAFE_NO_PAD, &mut data)?;
 
         Ok(Self::new(session, data))
@@ -168,7 +161,7 @@ impl Display for RefreshToken {
             f,
             "{}.{}",
             self.session,
-            base64::encode_config(self.data, URL_SAFE_NO_PAD)
+            base64::encode_config(self.secret, URL_SAFE_NO_PAD)
         );
     }
 }
@@ -335,7 +328,7 @@ mod tests {
         assert_eq!(
             RefreshToken::from_str("2f93d264-9f29-454d-b616-9ba57f95f9cf.ASNFZ4mrze8")
                 .unwrap()
-                .data[..8],
+                .secret[..8],
             [0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef]
         );
 
