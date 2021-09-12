@@ -18,8 +18,10 @@ use diesel::{
 };
 use email::SmtpConnSpec;
 use models::User;
+use once_cell::sync::Lazy;
 use pbkdf2::password_hash::{PasswordHash, PasswordVerifier};
 use std::env;
+use std::sync::Mutex;
 
 pub type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 pub type DbConn = r2d2::PooledConnection<ConnectionManager<PgConnection>>;
@@ -27,9 +29,13 @@ pub type DbConn = r2d2::PooledConnection<ConnectionManager<PgConnection>>;
 #[macro_use]
 extern crate diesel_migrations;
 
+static MIGRATION_MUTEX: Lazy<Mutex<()>> = Lazy::new(Mutex::default);
+
 /// Create a database pool and run the necessary migrations.
 #[must_use]
 pub fn initialize_pool(database_url: &str) -> DbPool {
+    let _shared = MIGRATION_MUTEX.lock().expect("failed to acquire lock");
+
     embed_migrations!();
 
     eprintln!("Connecting to Postgres");

@@ -391,6 +391,7 @@ dependencies = [
  "jsonwebtoken",
  "lettre",
  "lettre_email",
+ "once_cell",
  "openssl",
  "pbkdf2",
  "r2d2",
