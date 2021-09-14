@@ -24,9 +24,6 @@ pub enum Error {
     #[error("key not found")]
     KeyNotFound,
 
-    #[error("malformed token")]
-    MalformedToken,
-
     #[error("the token is missing or cannot be parsed")]
     MissingToken,
 
@@ -41,7 +38,7 @@ impl ResponseError for Error {
     fn status_code(&self) -> actix_web::http::StatusCode {
         use Error::{
             DieselError, EmailFailed, EmailInUse, InternalError, InvalidCredentials, InvalidEmail,
-            KeyNotFound, MalformedToken, MissingToken, SmtpError, UserNotFound,
+            KeyNotFound, MissingToken, SmtpError, UserNotFound,
         };
 
         match self {
@@ -62,7 +59,6 @@ impl ResponseError for Error {
             EmailInUse => StatusCode::CONFLICT,
             UserNotFound => StatusCode::NOT_FOUND,
             MissingToken => StatusCode::UNAUTHORIZED,
-            MalformedToken => StatusCode::BAD_REQUEST,
             EmailFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
             SmtpError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             InvalidEmail => StatusCode::BAD_REQUEST,
@@ -102,17 +98,16 @@ impl<E: std::fmt::Debug + Into<Self>> From<actix_web::error::BlockingError<E>> f
 
 impl From<jsonwebtoken::errors::Error> for Error {
     fn from(err: jsonwebtoken::errors::Error) -> Self {
-        use self::Error::{InternalError, InvalidCredentials, MalformedToken};
-        use jsonwebtoken::errors::ErrorKind::{
-            ExpiredSignature, InvalidEcdsaKey, InvalidRsaKey, InvalidSignature, InvalidToken,
-        };
+        use self::Error::{InternalError, InvalidCredentials};
+        use jsonwebtoken::errors::ErrorKind::*;
 
         match err.kind() {
-            InvalidToken => MalformedToken,
-            InvalidSignature | InvalidEcdsaKey | InvalidRsaKey | ExpiredSignature => {
-                InvalidCredentials
+            InvalidToken | InvalidSignature | InvalidAlgorithmName | InvalidAlgorithm
+            | ExpiredSignature | InvalidIssuer | InvalidAudience | InvalidSubject
+            | ImmatureSignature | Json(_) | Utf8(_) | Base64(_) => InvalidCredentials,
+            InvalidKeyFormat | Crypto(_) | InvalidEcdsaKey | InvalidRsaKey | __Nonexhaustive => {
+                InternalError
             }
-            _ => InternalError,
         }
     }
 }

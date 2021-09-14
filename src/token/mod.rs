@@ -34,13 +34,15 @@ impl AccessToken {
         Self(s.to_string())
     }
 
+    /// Verify and decode a JWT with relatively descriptive errors. **The errors should be made more opaque before
+    /// arriving at the user.**
     pub fn verify_and_decode(&self, conn: &DbConn) -> Result<AccessTokenClaims> {
         let header = jsonwebtoken::decode_header(&self.0)?;
         let kid: SessionId = header
             .kid
-            .ok_or(Error::MalformedToken)?
+            .ok_or(Error::InvalidCredentials)?
             .parse()
-            .map_err(|_| Error::MalformedToken)?;
+            .map_err(|_| Error::InvalidCredentials)?;
         let (key, key_owner, _exp) = Session::get_pubkey(conn, kid)?;
         let key = DecodingKey::from_rsa_pem(&key)?;
         let validation = Validation::new(Self::JWT_ALG);
@@ -48,7 +50,7 @@ impl AccessToken {
 
         if key_owner != decoded.claims.sub {
             // Something fishy is going on.
-            return Err(Error::MalformedToken);
+            return Err(Error::InvalidCredentials);
         }
 
         Ok(decoded.claims)

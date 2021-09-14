@@ -58,9 +58,13 @@ pub fn get_pool_from_env() -> DbPool {
     initialize_pool(&db_url)
 }
 
-pub fn get_test_conn() -> DbConn {
+pub fn get_test_pool() -> DbPool {
     dotenv::dotenv().ok();
-    let pool = get_pool_from_env();
+    get_pool_from_env()
+}
+
+pub fn get_test_conn() -> DbConn {
+    let pool = get_test_pool();
     pool.get().unwrap()
 }
 

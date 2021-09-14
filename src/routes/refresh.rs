@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     result::Result,
-    token::{AccessToken, refresh_token::RefreshToken},
+    token::{refresh_token::RefreshToken, AccessToken},
     DbPool,
 };
 

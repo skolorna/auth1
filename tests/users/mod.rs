@@ -13,7 +13,7 @@ use crate::common::Server;
 async fn get_nonexistent_user() {
     let server = Server::new();
 
-    let (res, status) = server
+    let (_, status) = server
         .post(
             "/login",
             json!({
@@ -42,7 +42,7 @@ async fn create_user_and_login() {
     let uid = res["id"].as_str().unwrap();
 
     // Email addresses are not reusable!
-    let (res, status) = server.post_json("/users", user1).await;
+    let (_, status) = server.post_json("/users", user1).await;
     assert_eq!(status, StatusCode::CONFLICT);
 
     let (access_token, refresh_token) =
@@ -67,6 +67,7 @@ async fn create_user_and_login() {
     assert_eq!(status, StatusCode::OK);
 
     let me = get_me(&server, res["access_token"].as_str().unwrap()).await;
+    assert_eq!(me["email"], json!("user1@example.com"));
 }
 
 async fn get_me(server: &Server, access_token: &str) -> Value {
@@ -89,7 +90,7 @@ async fn test_login(
     password: &str,
     user_id: &str,
 ) -> (String, String) {
-    let (res, status) = server
+    let (_, status) = server
         .post_json(
             "/login",
             json!({
