@@ -22,6 +22,7 @@ async fn list_sessions(pool: web::Data<DbPool>, ident: Identity) -> Result<HttpR
     let res = web::block(move || {
         Session::belonging_to(&ident.user)
             .select((columns::id, columns::sub, columns::started, columns::exp))
+            .filter(Session::not_expired())
             .load::<SessionInfo>(&conn)
     })
     .await?;
@@ -47,10 +48,10 @@ async fn delete_session(
     ident: Identity,
     web::Path(id): web::Path<SessionId>,
 ) -> Result<HttpResponse> {
-    use crate::schema::sessions::columns;
     let conn = pool.get()?;
     let num_deleted = web::block(move || {
-        diesel::delete(Session::belonging_to(&ident.user).filter(columns::id.eq(id))).execute(&conn)
+        diesel::delete(Session::belonging_to(&ident.user).filter(Session::with_id(id)))
+            .execute(&conn)
     })
     .await?;
 

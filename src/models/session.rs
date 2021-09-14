@@ -1,5 +1,10 @@
 use chrono::{DateTime, Duration, Utc};
-use diesel::prelude::*;
+use diesel::{
+    dsl::{Eq, Gt},
+    expression::bound::Bound,
+    prelude::*,
+    sql_types::{self, Timestamptz},
+};
 use openssl::rsa::Rsa;
 use serde::Serialize;
 use uuid::Uuid;
@@ -37,8 +42,19 @@ pub struct CreatedSession {
     pub access_token: AccessToken,
 }
 
+type NotExpired = Gt<sessions::columns::exp, Bound<Timestamptz, DateTime<Utc>>>;
+type WithId = Eq<sessions::columns::id, Bound<sql_types::Uuid, Uuid>>;
+
 impl Session {
     pub const RSA_BITS: u32 = 2048;
+
+    pub fn not_expired() -> NotExpired {
+        sessions::columns::exp.gt(Utc::now())
+    }
+
+    pub fn with_id(id: SessionId) -> WithId {
+        sessions::columns::id.eq(id)
+    }
 
     /// Create a new session for a specific user and insert the session into the
     /// database. A refresh token is generated and returned.
