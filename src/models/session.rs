@@ -5,12 +5,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use super::user::{User, UserId};
-use crate::{
-    result::{Error, Result},
-    schema::sessions,
-    token::{AccessToken, RefreshToken},
-    DbConn,
-};
+use crate::{DbConn, result::{Error, Result}, schema::sessions, token::{AccessToken, refresh_token::RefreshToken}};
 
 /// FIXME: In the future, it's probably better to use some sort of clock-based uuid generation:
 /// otherwise, albeit extremely unlikely, cache poisoning can occur if one session with id `a`
