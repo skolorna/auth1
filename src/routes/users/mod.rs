@@ -7,16 +7,16 @@ use actix_web::{
 };
 
 use crate::{
+    db::postgres::PgPool,
     email::{send_welcome_email, SmtpConnSpec},
     identity::Identity,
     models::{user::CreateUser, User},
     result::{Error, Result},
-    DbPool,
 };
 
 #[post("")]
 async fn create_user(
-    pool: web::Data<DbPool>,
+    pool: web::Data<PgPool>,
     smtp: web::Data<SmtpConnSpec>,
     data: web::Json<CreateUser>,
 ) -> Result<HttpResponse> {

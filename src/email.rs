@@ -9,7 +9,7 @@ use lettre::{
 };
 use lettre_email::{EmailBuilder, Mailbox};
 
-use crate::{result::Result, token::VerificationToken, DbConn};
+use crate::{db::postgres::PgConn, result::Result, token::VerificationToken};
 
 const FROM: (&str, &str) = ("system@skolorna.com", "Skolorna");
 const REPLY_TO: &str = "hej@skolorna.com";
@@ -95,7 +95,7 @@ pub fn send_email(
 }
 
 pub fn send_welcome_email(
-    db_conn: &DbConn,
+    db_conn: &PgConn,
     smtp: &SmtpConnSpec,
     mailbox: impl Into<Mailbox>,
 ) -> Result<()> {

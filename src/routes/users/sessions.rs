@@ -6,17 +6,17 @@ use actix_web::{
 use diesel::prelude::*;
 
 use crate::{
+    db::postgres::PgPool,
     identity::Identity,
     models::{
         session::{SessionId, SessionInfo},
         Session,
     },
     result::{Error, Result},
-    DbPool,
 };
 
 #[get("")]
-async fn list_sessions(pool: web::Data<DbPool>, ident: Identity) -> Result<HttpResponse> {
+async fn list_sessions(pool: web::Data<PgPool>, ident: Identity) -> Result<HttpResponse> {
     use crate::schema::sessions::columns;
     let conn = pool.get()?;
     let res = web::block(move || {
@@ -33,7 +33,7 @@ async fn list_sessions(pool: web::Data<DbPool>, ident: Identity) -> Result<HttpR
 }
 
 #[delete("")]
-async fn clear_sessions(pool: web::Data<DbPool>, ident: Identity) -> Result<HttpResponse> {
+async fn clear_sessions(pool: web::Data<PgPool>, ident: Identity) -> Result<HttpResponse> {
     let conn = pool.get()?;
     let num_deleted =
         web::block(move || diesel::delete(Session::belonging_to(&ident.user)).execute(&conn))
@@ -44,7 +44,7 @@ async fn clear_sessions(pool: web::Data<DbPool>, ident: Identity) -> Result<Http
 
 #[delete("/{id}")]
 async fn delete_session(
-    pool: web::Data<DbPool>,
+    pool: web::Data<PgPool>,
     ident: Identity,
     web::Path(id): web::Path<SessionId>,
 ) -> Result<HttpResponse> {

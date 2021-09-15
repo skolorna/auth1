@@ -1,8 +1,9 @@
 use std::str::FromStr;
 
-use crate::hash_password;
+use crate::crypto::hash_password;
+use crate::db::postgres::PgConn;
 use crate::result::{Error, Result};
-use crate::{schema::users, DbConn};
+use crate::schema::users;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use lettre::EmailAddress;
@@ -29,7 +30,7 @@ pub struct CreateUser {
 }
 
 impl User {
-    pub fn find_by_email(conn: &DbConn, email: &str) -> Result<Self> {
+    pub fn find_by_email(conn: &PgConn, email: &str) -> Result<Self> {
         use crate::schema::users::{columns, dsl::users};
         users
             .filter(columns::email.eq(email))
@@ -40,7 +41,7 @@ impl User {
             })
     }
 
-    pub fn create(conn: &DbConn, query: CreateUser) -> Result<Self> {
+    pub fn create(conn: &PgConn, query: CreateUser) -> Result<Self> {
         let email = EmailAddress::from_str(&query.email).map_err(|_| Error::InvalidEmail)?;
         let hash = hash_password(query.password.as_bytes())?;
 
@@ -107,7 +108,7 @@ mod tests {
     use chrono::NaiveDateTime;
     use serde_json::json;
 
-    use crate::{get_test_conn, result::Error};
+    use crate::{db::postgres::pg_test_conn, result::Error};
 
     use super::*;
 
@@ -135,7 +136,7 @@ mod tests {
 
     #[test]
     fn get_user_by_email() {
-        let conn = get_test_conn();
+        let conn = pg_test_conn();
 
         match User::find_by_email(&conn, "nonexistentuser@example.com") {
             Err(Error::UserNotFound) => {}

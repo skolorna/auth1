@@ -3,7 +3,7 @@ pub mod refresh_token;
 
 use std::fmt::Display;
 
-use crate::diesel::QueryDsl;
+use crate::{db::postgres::PgConn, diesel::QueryDsl};
 use chrono::{Duration, Utc};
 use diesel::prelude::*;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 use crate::{
     models::{session::SessionId, user::UserId, Session},
     result::{Error, Result},
-    DbConn,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -36,7 +35,7 @@ impl AccessToken {
 
     /// Verify and decode a JWT with relatively descriptive errors. **The errors should be made more opaque before
     /// arriving at the user.**
-    pub fn verify_and_decode(&self, conn: &DbConn) -> Result<AccessTokenClaims> {
+    pub fn verify_and_decode(&self, conn: &PgConn) -> Result<AccessTokenClaims> {
         let header = jsonwebtoken::decode_header(&self.0)?;
         let kid: SessionId = header
             .kid
@@ -68,7 +67,7 @@ impl VerificationToken {
         Self(s.to_string())
     }
 
-    pub fn generate(conn: &DbConn, email: impl ToString) -> Result<Self> {
+    pub fn generate(conn: &PgConn, email: impl ToString) -> Result<Self> {
         use crate::schema::users::{columns, table};
 
         let email = email.to_string();
@@ -89,7 +88,7 @@ impl VerificationToken {
         Ok(Self::new(token))
     }
 
-    pub fn verify(&self, conn: &DbConn) -> Result<()> {
+    pub fn verify(&self, conn: &PgConn) -> Result<()> {
         use crate::schema::users::{columns, table};
 
         let data = jsonwebtoken::dangerous_insecure_decode::<VerificationTokenClaims>(&self.0)?;

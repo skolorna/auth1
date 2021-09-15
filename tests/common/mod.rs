@@ -1,5 +1,10 @@
 use actix_web::{http::StatusCode, test};
-use auth1::{create_app, email::SmtpConnSpec, get_pool_from_env, Data};
+use auth1::{
+    create_app,
+    db::{postgres::pg_pool_from_env, redis::redis_pool_from_env},
+    email::SmtpConnSpec,
+    Data,
+};
 use dotenv::dotenv;
 use serde_json::Value;
 
@@ -10,7 +15,8 @@ impl Server {
         dotenv().ok();
 
         Self(Data {
-            pool: get_pool_from_env(),
+            redis: redis_pool_from_env(),
+            pg: pg_pool_from_env(),
             smtp: SmtpConnSpec::new_test_inbox(),
         })
     }

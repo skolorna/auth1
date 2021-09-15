@@ -11,10 +11,10 @@ use uuid::Uuid;
 
 use super::user::{User, UserId};
 use crate::{
+    db::postgres::PgConn,
     result::{Error, Result},
     schema::sessions,
     token::{refresh_token::RefreshToken, AccessToken},
-    DbConn,
 };
 
 /// FIXME: In the future, it's probably better to use some sort of clock-based uuid generation:
@@ -58,7 +58,7 @@ impl Session {
 
     /// Create a new session for a specific user and insert the session into the
     /// database. A refresh token is generated and returned.
-    pub fn create(conn: &DbConn, sub: UserId) -> Result<CreatedSession> {
+    pub fn create(conn: &PgConn, sub: UserId) -> Result<CreatedSession> {
         let id = Uuid::new_v4();
         let refresh_token = RefreshToken::generate_secret(id);
 
@@ -109,7 +109,7 @@ impl Session {
     /// the key has expired or not as this public key is exclusively
     /// used for *validation* of access tokens that in turn have
     /// much shorter lifetimes.
-    pub fn get_pubkey(conn: &DbConn, id: SessionId) -> Result<(Vec<u8>, UserId, DateTime<Utc>)> {
+    pub fn get_pubkey(conn: &PgConn, id: SessionId) -> Result<(Vec<u8>, UserId, DateTime<Utc>)> {
         use crate::schema::sessions::{columns, table};
         let (pubkey, exp, sub): (Vec<u8>, DateTime<Utc>, UserId) = table
             .select((columns::public_key, columns::exp, columns::sub))
@@ -152,13 +152,13 @@ struct NewSession<'a> {
 mod tests {
     use uuid::Uuid;
 
-    use crate::{get_test_conn, result::Error};
+    use crate::{db::postgres::pg_test_conn, result::Error};
 
     use super::Session;
 
     #[test]
     fn issue_access_token() {
-        let conn = get_test_conn();
+        let conn = pg_test_conn();
 
         match Session::create(&conn, Uuid::nil()) {
             Err(Error::UserNotFound) => {} // Of course there isn't a nil user

@@ -1,9 +1,9 @@
 use actix_web::{post, web, HttpResponse};
 use serde::Deserialize;
 
+use crate::db::postgres::PgPool;
 use crate::result::Result;
 use crate::token::VerificationToken;
-use crate::DbPool;
 
 #[derive(Deserialize)]
 pub struct VerificationQuery {
@@ -12,7 +12,7 @@ pub struct VerificationQuery {
 
 #[post("")]
 async fn verify_email(
-    pool: web::Data<DbPool>,
+    pool: web::Data<PgPool>,
     info: web::Json<VerificationQuery>,
 ) -> Result<HttpResponse> {
     let conn = pool.get()?;

@@ -1,15 +1,15 @@
 use actix_web::http::header::{self, CacheControl, CacheDirective};
 use actix_web::{get, web, HttpResponse};
 
+use crate::db::postgres::PgPool;
 use crate::models::session::SessionId;
 use crate::models::Session;
 use crate::result::Result;
 use crate::util::http_date_fmt;
-use crate::DbPool;
 
 #[get("/{id}")]
 async fn get_pubkey(
-    pool: web::Data<DbPool>,
+    pool: web::Data<PgPool>,
     web::Path(id): web::Path<SessionId>,
 ) -> Result<HttpResponse> {
     let conn = pool.get()?;

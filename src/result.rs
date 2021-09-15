@@ -1,10 +1,14 @@
 use actix_web::{http::StatusCode, ResponseError};
+use r2d2_redis::redis::RedisError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("database error: {0}")]
     DieselError(#[from] diesel::result::Error),
+
+    #[error("redis error")]
+    RedisError(#[from] RedisError),
 
     #[error("failed to compose email")]
     EmailFailed(#[from] lettre_email::error::Error),
@@ -38,7 +42,7 @@ impl ResponseError for Error {
     fn status_code(&self) -> actix_web::http::StatusCode {
         use Error::{
             DieselError, EmailFailed, EmailInUse, InternalError, InvalidCredentials, InvalidEmail,
-            KeyNotFound, MissingToken, SmtpError, UserNotFound,
+            KeyNotFound, MissingToken, RedisError, SmtpError, UserNotFound,
         };
 
         match self {
@@ -63,6 +67,7 @@ impl ResponseError for Error {
             SmtpError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             InvalidEmail => StatusCode::BAD_REQUEST,
             KeyNotFound => StatusCode::NOT_FOUND,
+            RedisError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

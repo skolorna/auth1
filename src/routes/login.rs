@@ -1,9 +1,10 @@
 use actix_web::{post, web, HttpResponse};
 use serde::Deserialize;
 
+use crate::db::postgres::PgPool;
+use crate::login_with_password;
 use crate::models::Session;
 use crate::result::Result;
-use crate::{login_with_password, DbPool};
 
 #[derive(Debug, Deserialize)]
 struct LoginRequest {
@@ -13,7 +14,7 @@ struct LoginRequest {
 
 #[post("")]
 async fn handle_login(
-    pool: web::Data<DbPool>,
+    pool: web::Data<PgPool>,
     credentials: web::Json<LoginRequest>,
 ) -> Result<HttpResponse> {
     let conn = pool.get()?;

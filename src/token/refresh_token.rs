@@ -2,7 +2,7 @@
 
 use std::{fmt::Display, str::FromStr};
 
-use crate::diesel::QueryDsl;
+use crate::{db::postgres::PgConn, diesel::QueryDsl};
 use base64::URL_SAFE_NO_PAD;
 use chrono::{DateTime, Duration, Utc};
 use diesel::prelude::*;
@@ -14,7 +14,6 @@ use thiserror::Error;
 use crate::{
     models::{session::SessionId, user::UserId},
     result::{Error, Result},
-    DbConn,
 };
 
 use super::{AccessToken, AccessTokenClaims};
@@ -76,7 +75,7 @@ impl RefreshToken {
         Ok(plaintext)
     }
 
-    pub fn sign_access_token_simple(&self, conn: &DbConn) -> Result<AccessToken> {
+    pub fn sign_access_token_simple(&self, conn: &PgConn) -> Result<AccessToken> {
         use crate::schema::sessions::{columns, table};
 
         let (exp, private_key, sub): (_, Vec<u8>, UserId) = table

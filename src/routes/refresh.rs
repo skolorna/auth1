@@ -2,9 +2,9 @@ use actix_web::{post, web, HttpResponse};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    db::postgres::PgPool,
     result::Result,
     token::{refresh_token::RefreshToken, AccessToken},
-    DbPool,
 };
 
 #[derive(Debug, Deserialize)]
@@ -19,7 +19,7 @@ struct RefreshAccessTokenResponse {
 
 #[post("")]
 async fn refresh_access_token(
-    pool: web::Data<DbPool>,
+    pool: web::Data<PgPool>,
     web::Json(RefreshAccessTokenRequest { token }): web::Json<RefreshAccessTokenRequest>,
 ) -> Result<HttpResponse> {
     let conn = pool.get()?;

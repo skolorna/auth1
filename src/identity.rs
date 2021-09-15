@@ -1,10 +1,10 @@
 use std::pin::Pin;
 
 use crate::{
+    db::postgres::PgPool,
     models::User,
     result::Error,
     token::{AccessToken, AccessTokenClaims},
-    DbPool,
 };
 
 use actix_web::{http::header::Header, web, FromRequest};
@@ -36,7 +36,7 @@ impl FromRequest for Identity {
         };
 
         let pool = req
-            .app_data::<web::Data<DbPool>>()
+            .app_data::<web::Data<PgPool>>()
             .expect("db pool not set in app_data")
             .clone();
 
@@ -58,7 +58,7 @@ impl FromRequest for Identity {
 
 #[cfg(test)]
 mod tests {
-    use crate::get_test_pool;
+    use crate::db::postgres::pg_test_pool;
 
     use super::*;
     use actix_web::http::{header, StatusCode};
@@ -84,7 +84,7 @@ mod tests {
             ),
         ];
 
-        let pool = get_test_pool();
+        let pool = pg_test_pool();
 
         for (req, status) in expected {
             let req = req.data(pool.clone());
