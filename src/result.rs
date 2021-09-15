@@ -1,4 +1,11 @@
-use actix_web::{http::StatusCode, ResponseError};
+use std::convert::TryInto;
+
+use actix_web::{
+    dev::HttpResponseBuilder,
+    http::{header, StatusCode},
+    HttpResponse, ResponseError,
+};
+use chrono::Duration;
 use r2d2_redis::redis::RedisError;
 use thiserror::Error;
 
@@ -34,6 +41,9 @@ pub enum Error {
     #[error("email delivery failed")]
     SmtpError(#[from] lettre::smtp::error::Error),
 
+    #[error("rate limit exceeded")]
+    RateLimitExceeded { retry_after: Option<Duration> },
+
     #[error("user not found")]
     UserNotFound,
 }
@@ -42,7 +52,7 @@ impl ResponseError for Error {
     fn status_code(&self) -> actix_web::http::StatusCode {
         use Error::{
             DieselError, EmailFailed, EmailInUse, InternalError, InvalidCredentials, InvalidEmail,
-            KeyNotFound, MissingToken, RedisError, SmtpError, UserNotFound,
+            KeyNotFound, MissingToken, RateLimitExceeded, RedisError, SmtpError, UserNotFound,
         };
 
         match self {
@@ -68,7 +78,27 @@ impl ResponseError for Error {
             InvalidEmail => StatusCode::BAD_REQUEST,
             KeyNotFound => StatusCode::NOT_FOUND,
             RedisError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
         }
+    }
+
+    fn error_response(&self) -> HttpResponse {
+        let mut res = HttpResponseBuilder::new(self.status_code());
+
+        res.header(header::CONTENT_TYPE, "text/plain; charset=utf-8");
+
+        match self {
+            Error::RateLimitExceeded {
+                retry_after: Some(retry_after),
+            } => {
+                let secs: u64 = retry_after.num_seconds().try_into().unwrap_or(0);
+
+                res.header(header::RETRY_AFTER, secs.to_string());
+            }
+            _ => {}
+        }
+
+        res.body(self.to_string())
     }
 }
 

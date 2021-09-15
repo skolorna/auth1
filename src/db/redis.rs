@@ -3,6 +3,7 @@ use std::env;
 use r2d2_redis::RedisConnectionManager;
 
 pub type RedisPool = r2d2::Pool<RedisConnectionManager>;
+pub type RedisConn = r2d2::PooledConnection<RedisConnectionManager>;
 
 pub fn initialize_redis_pool(redis_url: &str) -> RedisPool {
     eprintln!("Initializing Redis pool");

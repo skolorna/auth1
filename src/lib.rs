@@ -3,6 +3,8 @@ pub mod db;
 pub mod email;
 pub mod identity;
 pub mod models;
+pub mod rate_limit;
+pub mod remote_ip;
 pub mod result;
 pub mod routes;
 pub mod schema;
