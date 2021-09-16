@@ -11,7 +11,7 @@ use crate::{
     email::{send_welcome_email, SmtpConnSpec},
     identity::Identity,
     models::{user::CreateUser, User},
-    rate_limit::{RateLimited, SimpleRateLimit},
+    rate_limit::{RateLimit, SlidingWindow},
     remote_ip::RemoteIp,
     result::{Error, Result},
 };
@@ -24,11 +24,9 @@ async fn create_user(
     data: web::Json<CreateUser>,
     remote_ip: RemoteIp,
 ) -> Result<HttpResponse> {
-    const RATE_LIMIT: SimpleRateLimit = SimpleRateLimit::new("create_user", 60, 10);
+    const RATE_LIMIT: SlidingWindow = SlidingWindow::new("create_user", 3600, 100);
 
-    let remaining_requests = RATE_LIMIT.remaining_requests(&remote_ip.into(), &mut redis.get()?)?;
-
-    dbg!(remaining_requests);
+    web::block(move || RATE_LIMIT.remaining_requests(&remote_ip.into(), &mut redis.get()?)).await?;
 
     let pg = pg.get()?;
     let created_user = web::block::<_, _, Error>(move || {

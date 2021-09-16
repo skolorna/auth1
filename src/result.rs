@@ -87,15 +87,13 @@ impl ResponseError for Error {
 
         res.header(header::CONTENT_TYPE, "text/plain; charset=utf-8");
 
-        match self {
-            Error::RateLimitExceeded {
-                retry_after: Some(retry_after),
-            } => {
-                let secs: u64 = retry_after.num_seconds().try_into().unwrap_or(0);
+        if let Error::RateLimitExceeded {
+            retry_after: Some(retry_after),
+        } = self
+        {
+            let secs: u64 = retry_after.num_seconds().try_into().unwrap_or(0);
 
-                res.header(header::RETRY_AFTER, secs.to_string());
-            }
-            _ => {}
+            res.header(header::RETRY_AFTER, secs.to_string());
         }
 
         res.body(self.to_string())

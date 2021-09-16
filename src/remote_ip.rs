@@ -1,4 +1,7 @@
-use std::{net::IpAddr, pin::Pin};
+use std::{
+    net::{IpAddr, Ipv4Addr},
+    pin::Pin,
+};
 
 use actix_web::{FromRequest, HttpRequest};
 use futures_util::Future;
@@ -14,7 +17,10 @@ impl FromRequest for RemoteIp {
     type Config = ();
 
     fn from_request(req: &HttpRequest, _: &mut actix_web::dev::Payload) -> Self::Future {
-        let ip = req.peer_addr().expect("no peer address").ip();
+        let ip = req
+            .peer_addr()
+            .map(|addr| addr.ip())
+            .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST));
 
         Box::pin(async move { Ok(Self(ip)) })
     }
