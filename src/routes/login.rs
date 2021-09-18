@@ -22,9 +22,10 @@ async fn handle_login(
     credentials: web::Json<LoginRequest>,
     remote_ip: RemoteIp,
 ) -> Result<HttpResponse> {
-    const RATE_LIMIT: SlidingWindow = SlidingWindow::new("login", 60, 60);
+    const RATE_LIMIT: SlidingWindow = SlidingWindow::new("login", 60, 10);
 
-    web::block(move || RATE_LIMIT.remaining_requests(&remote_ip.into(), &mut redis.get()?)).await?;
+    let client = format!("{}/{}", remote_ip, &credentials.email);
+    web::block(move || RATE_LIMIT.remaining_requests(&client, &mut redis.get()?)).await?;
 
     let pg = pg.get()?;
     let res = web::block(move || {

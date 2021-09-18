@@ -26,7 +26,8 @@ async fn create_user(
 ) -> Result<HttpResponse> {
     const RATE_LIMIT: SlidingWindow = SlidingWindow::new("create_user", 3600, 100);
 
-    web::block(move || RATE_LIMIT.remaining_requests(&remote_ip.into(), &mut redis.get()?)).await?;
+    web::block(move || RATE_LIMIT.remaining_requests(&remote_ip.to_string(), &mut redis.get()?))
+        .await?;
 
     let pg = pg.get()?;
     let created_user = web::block::<_, _, Error>(move || {

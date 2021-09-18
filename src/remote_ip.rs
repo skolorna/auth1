@@ -1,4 +1,5 @@
 use std::{
+    fmt::Display,
     net::{IpAddr, Ipv4Addr},
     pin::Pin,
 };
@@ -23,6 +24,12 @@ impl FromRequest for RemoteIp {
             .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST));
 
         Box::pin(async move { Ok(Self(ip)) })
+    }
+}
+
+impl Display for RemoteIp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
