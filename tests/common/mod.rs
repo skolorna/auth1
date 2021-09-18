@@ -1,4 +1,9 @@
-use actix_web::{http::StatusCode, test};
+pub mod test_user;
+
+use actix_web::{
+    http::StatusCode,
+    test::{self, TestRequest},
+};
 use auth1::{
     client_info::ClientInfoConfig,
     create_app,
@@ -7,7 +12,11 @@ use auth1::{
     Data,
 };
 use dotenv::dotenv;
-use serde_json::Value;
+use serde_json::{json, Value};
+
+use self::test_user::TestUser;
+
+pub type TestResponse = (Value, StatusCode);
 
 pub struct Server(pub Data);
 
@@ -21,6 +30,23 @@ impl Server {
             smtp: SmtpConnSpec::new_test_inbox(),
             client: ClientInfoConfig::default(),
         })
+    }
+
+    pub async fn send(&self, req: TestRequest) -> (Vec<u8>, StatusCode) {
+        let mut app = test::init_service(create_app!(self.0.clone())).await;
+
+        let res = test::call_service(&mut app, req.to_request()).await;
+
+        let status_code = res.status();
+        let body = test::read_body(res).await;
+
+        (body.to_vec(), status_code)
+    }
+
+    pub async fn send_json(&self, req: TestRequest) -> TestResponse {
+        let (body, status) = self.send(req).await;
+        let response = serde_json::from_slice(&body).unwrap_or_default();
+        (response, status)
     }
 
     pub async fn post(&self, url: impl AsRef<str>, body: Value) -> (Vec<u8>, StatusCode) {
@@ -37,7 +63,7 @@ impl Server {
         (body.to_vec(), status_code)
     }
 
-    pub async fn post_json(&self, url: impl AsRef<str>, body: Value) -> (Value, StatusCode) {
+    pub async fn post_json(&self, url: impl AsRef<str>, body: Value) -> TestResponse {
         let (body, status_code) = self.post(url, body).await;
         let response = serde_json::from_slice(&body).unwrap_or_default();
         (response, status_code)
@@ -54,9 +80,37 @@ impl Server {
         (body.to_vec(), status_code)
     }
 
-    pub async fn get_json(&self, url: impl AsRef<str>) -> (Value, StatusCode) {
-        let (body, status_code) = self.get(url).await;
-        let response = serde_json::from_slice(&body).unwrap_or_default();
-        (response, status_code)
+    pub async fn create_user(&self, email: &str, password: &str) -> TestUser {
+        let (_, status) = self
+            .post_json(
+                "/users",
+                json!({
+                    "email": email,
+                    "password": password,
+                }),
+            )
+            .await;
+        assert_eq!(
+            status,
+            StatusCode::CREATED,
+            "failed to create user {}",
+            email
+        );
+
+        let (res, status) = self.login_user(email, password).await;
+        assert_eq!(status, StatusCode::OK);
+
+        TestUser::new(res["access_token"].as_str().unwrap().to_owned())
+    }
+
+    pub async fn login_user(&self, email: &str, password: &str) -> (Value, StatusCode) {
+        self.post_json(
+            "/login",
+            json!({
+                "email": email,
+                "password": password,
+            }),
+        )
+        .await
     }
 }

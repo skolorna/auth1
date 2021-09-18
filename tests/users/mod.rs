@@ -1,3 +1,5 @@
+mod update;
+
 use std::str::FromStr;
 
 use actix_web::{http::StatusCode, test};
@@ -14,12 +16,9 @@ async fn get_nonexistent_user() {
     let server = Server::new();
 
     let (_, status) = server
-        .post(
-            "/login",
-            json!({
-                "email": "nonexistentuserpleasedontuse@example.com",
-                "password": "perf3ctlÿf1nepassw0rd",
-            }),
+        .login_user(
+            "nonexistentuserpleasedontuse@example.com",
+            "perf3ctlÿf1nepassw0rd",
         )
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);

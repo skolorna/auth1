@@ -1,12 +1,15 @@
+use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 
-use crate::crypto::hash_password;
-use crate::db::postgres::PgConn;
+use crate::crypto::{hash_password, verify_password};
+use crate::db::postgres::{PgConn};
 use crate::result::{Error, Result};
 use crate::schema::users;
+
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use lettre::EmailAddress;
+use pbkdf2::password_hash::PasswordHash;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -29,6 +32,33 @@ pub struct CreateUser {
     pub password: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct UpdateUser {
+    pub password: String,
+    pub new_password: Option<String>,
+}
+
+#[derive(AsChangeset)]
+#[table_name = "users"]
+struct UserChangeset {
+    pub hash: Option<String>,
+}
+
+impl TryFrom<UpdateUser> for UserChangeset {
+    type Error = Error;
+
+    fn try_from(u: UpdateUser) -> core::result::Result<Self, Self::Error> {
+        let UpdateUser {
+            password: _,
+            new_password,
+        } = u;
+
+        let hash = new_password.map_or(Ok(None), |p| hash_password(p.as_bytes()).map(Some))?;
+
+        Ok(Self { hash })
+    }
+}
+
 impl User {
     pub fn find_by_email(conn: &PgConn, email: &str) -> Result<Self> {
         use crate::schema::users::{columns, dsl::users};
@@ -41,7 +71,7 @@ impl User {
             })
     }
 
-    pub fn create(conn: &PgConn, query: CreateUser) -> Result<Self> {
+    pub fn create(conn: &PgConn, query: &CreateUser) -> Result<Self> {
         let email = EmailAddress::from_str(&query.email).map_err(|_| Error::InvalidEmail)?;
         let hash = hash_password(query.password.as_bytes())?;
 
@@ -63,6 +93,21 @@ impl User {
             })?;
 
         Ok(inserted_row)
+    }
+
+    pub fn hash(&self) -> PasswordHash {
+        PasswordHash::new(&self.hash).expect("failed to parse hash")
+    }
+
+    /// Update the user while verifying that the password is correct.
+    pub fn update(&self, pg: &PgConn, update: UpdateUser) -> Result<Self> {
+        verify_password(update.password.as_bytes(), &self.hash())?;
+
+        let cs: UserChangeset = update.try_into()?;
+
+        let result = diesel::update(self).set(cs).get_result::<Self>(pg)?;
+
+        Ok(result)
     }
 }
 

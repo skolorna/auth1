@@ -26,14 +26,12 @@ use db::{
 };
 use email::SmtpConnSpec;
 use models::User;
-use pbkdf2::password_hash::PasswordHash;
 
 /// Login using email and password.
 pub fn login_with_password(conn: &PgConn, email: &str, password: &str) -> Result<User> {
     let user = User::find_by_email(conn, email)?;
-    let hash = PasswordHash::new(&user.hash).expect("failed to parse hash");
 
-    verify_password(password.as_bytes(), &hash)?;
+    verify_password(password.as_bytes(), &user.hash())?;
 
     Ok(user)
 }

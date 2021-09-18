@@ -3,7 +3,7 @@ pub mod sessions;
 use actix_web::{
     get,
     http::header::{CacheControl, CacheDirective},
-    post, web, HttpResponse,
+    patch, post, web, HttpResponse,
 };
 
 use crate::{
@@ -11,7 +11,10 @@ use crate::{
     db::{postgres::PgPool, redis::RedisPool},
     email::{send_welcome_email, SmtpConnSpec},
     identity::Identity,
-    models::{user::CreateUser, User},
+    models::{
+        user::{CreateUser, UpdateUser},
+        User,
+    },
     rate_limit::{RateLimit, SlidingWindow},
     result::{Error, Result},
 };
@@ -21,7 +24,7 @@ async fn create_user(
     pg: web::Data<PgPool>,
     redis: web::Data<RedisPool>,
     smtp: web::Data<SmtpConnSpec>,
-    data: web::Json<CreateUser>,
+    web::Json(data): web::Json<CreateUser>,
     client_info: ClientInfo,
 ) -> Result<HttpResponse> {
     const RATE_LIMIT: SlidingWindow = SlidingWindow::new("create_user", 3600, 100);
@@ -31,7 +34,7 @@ async fn create_user(
 
     let pg = pg.get()?;
     let created_user = web::block::<_, _, Error>(move || {
-        let created_user = User::create(&pg, data.0)?;
+        let created_user = User::create(&pg, &data)?;
         send_welcome_email(&pg, smtp.as_ref(), created_user.email.clone())?;
         Ok(created_user)
     })
@@ -47,8 +50,20 @@ async fn get_me(ident: Identity) -> Result<HttpResponse> {
         .json(ident.user))
 }
 
+#[patch("/@me")]
+async fn patch_me(
+    ident: Identity,
+    web::Json(info): web::Json<UpdateUser>,
+    pool: web::Data<PgPool>,
+) -> Result<HttpResponse> {
+    let result = web::block(move || ident.user.update(&pool.get()?, info)).await?;
+
+    Ok(HttpResponse::Ok().json(result))
+}
+
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(create_user)
         .service(get_me)
+        .service(patch_me)
         .service(web::scope("/@me/sessions").configure(sessions::configure));
 }
