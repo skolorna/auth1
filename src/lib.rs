@@ -1,10 +1,10 @@
+pub mod client_info;
 pub mod crypto;
 pub mod db;
 pub mod email;
 pub mod identity;
 pub mod models;
 pub mod rate_limit;
-pub mod remote_ip;
 pub mod result;
 pub mod routes;
 pub mod schema;
@@ -18,6 +18,7 @@ extern crate diesel;
 extern crate diesel_migrations;
 
 use crate::result::Result;
+use client_info::ClientInfoConfig;
 use crypto::verify_password;
 use db::{
     postgres::{pg_pool_from_env, PgConn, PgPool},
@@ -42,6 +43,7 @@ pub struct Data {
     pub pg: PgPool,
     pub redis: RedisPool,
     pub smtp: SmtpConnSpec,
+    pub client: ClientInfoConfig,
 }
 
 impl Data {
@@ -50,6 +52,7 @@ impl Data {
             redis: redis_pool_from_env(),
             smtp: SmtpConnSpec::from_env(),
             pg: pg_pool_from_env(),
+            client: ClientInfoConfig { trust_proxy: false },
         }
     }
 }
@@ -60,12 +63,18 @@ macro_rules! create_app {
         use actix_web::middleware::{normalize, Logger};
         use actix_web::{web, App};
 
-        let auth1::Data { pg, smtp, redis } = $data;
+        let auth1::Data {
+            pg,
+            smtp,
+            redis,
+            client,
+        } = $data;
 
         App::new()
             .data(pg)
             .data(redis)
             .data(smtp)
+            .app_data(client)
             .app_data(
                 web::JsonConfig::default()
                     .error_handler(|err, _req| actix_web::error::ErrorBadRequest(err)),

@@ -1,5 +1,6 @@
 use actix_web::{http::StatusCode, test};
 use auth1::{
+    client_info::ClientInfoConfig,
     create_app,
     db::{postgres::pg_pool_from_env, redis::redis_pool_from_env},
     email::SmtpConnSpec,
@@ -18,6 +19,7 @@ impl Server {
             redis: redis_pool_from_env(),
             pg: pg_pool_from_env(),
             smtp: SmtpConnSpec::new_test_inbox(),
+            client: ClientInfoConfig::default(),
         })
     }
 

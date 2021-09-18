@@ -7,12 +7,12 @@ use actix_web::{
 };
 
 use crate::{
+    client_info::ClientInfo,
     db::{postgres::PgPool, redis::RedisPool},
     email::{send_welcome_email, SmtpConnSpec},
     identity::Identity,
     models::{user::CreateUser, User},
     rate_limit::{RateLimit, SlidingWindow},
-    remote_ip::RemoteIp,
     result::{Error, Result},
 };
 
@@ -22,11 +22,11 @@ async fn create_user(
     redis: web::Data<RedisPool>,
     smtp: web::Data<SmtpConnSpec>,
     data: web::Json<CreateUser>,
-    remote_ip: RemoteIp,
+    client_info: ClientInfo,
 ) -> Result<HttpResponse> {
     const RATE_LIMIT: SlidingWindow = SlidingWindow::new("create_user", 3600, 100);
 
-    web::block(move || RATE_LIMIT.remaining_requests(&remote_ip.to_string(), &mut redis.get()?))
+    web::block(move || RATE_LIMIT.remaining_requests(&client_info.to_string(), &mut redis.get()?))
         .await?;
 
     let pg = pg.get()?;

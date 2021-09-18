@@ -1,12 +1,12 @@
 use actix_web::{post, web, HttpResponse};
 use serde::Deserialize;
 
+use crate::client_info::ClientInfo;
 use crate::db::postgres::PgPool;
 use crate::db::redis::RedisPool;
 use crate::login_with_password;
 use crate::models::Session;
 use crate::rate_limit::{RateLimit, SlidingWindow};
-use crate::remote_ip::RemoteIp;
 use crate::result::Result;
 
 #[derive(Debug, Deserialize)]
@@ -20,11 +20,11 @@ async fn handle_login(
     pg: web::Data<PgPool>,
     redis: web::Data<RedisPool>,
     credentials: web::Json<LoginRequest>,
-    remote_ip: RemoteIp,
+    client_info: ClientInfo,
 ) -> Result<HttpResponse> {
     const RATE_LIMIT: SlidingWindow = SlidingWindow::new("login", 60, 10);
 
-    let client = format!("{}/{}", remote_ip, &credentials.email);
+    let client = format!("{}/{}", client_info.addr, &credentials.email);
     web::block(move || RATE_LIMIT.remaining_requests(&client, &mut redis.get()?)).await?;
 
     let pg = pg.get()?;
