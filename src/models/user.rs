@@ -2,7 +2,7 @@ use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 
 use crate::crypto::{hash_password, verify_password};
-use crate::db::postgres::{PgConn};
+use crate::db::postgres::PgConn;
 use crate::result::{Error, Result};
 use crate::schema::users;
 

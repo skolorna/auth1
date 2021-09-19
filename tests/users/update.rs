@@ -1,6 +1,4 @@
-use actix_web::{
-    http::{Method, StatusCode},
-};
+use actix_web::http::{Method, StatusCode};
 use serde_json::json;
 
 use crate::common::Server;
