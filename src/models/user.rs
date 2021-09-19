@@ -1,14 +1,14 @@
 use std::convert::{TryFrom, TryInto};
-use std::str::FromStr;
 
 use crate::crypto::{hash_password, verify_password};
 use crate::db::postgres::PgConn;
 use crate::result::{Error, Result};
 use crate::schema::users;
+use crate::types::EmailAddress;
 
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use lettre::EmailAddress;
+use lettre_email::Mailbox;
 use pbkdf2::password_hash::PasswordHash;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -19,7 +19,7 @@ pub type UserId = Uuid;
 #[serde(into = "JsonUser")]
 pub struct User {
     pub id: UserId,
-    pub email: String,
+    pub email: EmailAddress,
     pub verified: bool,
     pub hash: String,
     pub created_at: DateTime<Utc>,
@@ -28,7 +28,7 @@ pub struct User {
 #[non_exhaustive]
 #[derive(Debug, Deserialize)]
 pub struct CreateUser {
-    pub email: String,
+    pub email: EmailAddress,
     pub password: String,
 }
 
@@ -60,7 +60,7 @@ impl TryFrom<UpdateUser> for UserChangeset {
 }
 
 impl User {
-    pub fn find_by_email(conn: &PgConn, email: &str) -> Result<Self> {
+    pub fn find_by_email(conn: &PgConn, email: &EmailAddress) -> Result<Self> {
         use crate::schema::users::{columns, dsl::users};
         users
             .filter(columns::email.eq(email))
@@ -72,12 +72,11 @@ impl User {
     }
 
     pub fn create(conn: &PgConn, query: &CreateUser) -> Result<Self> {
-        let email = EmailAddress::from_str(&query.email).map_err(|_| Error::InvalidEmail)?;
         let hash = hash_password(query.password.as_bytes())?;
 
         let new_user = NewUser {
             id: Uuid::new_v4(),
-            email: &email.to_string(),
+            email: &query.email.to_string(),
             hash: &hash,
         };
 
@@ -111,6 +110,12 @@ impl User {
     }
 }
 
+impl From<&User> for Mailbox {
+    fn from(u: &User) -> Self {
+        Mailbox::new_with_name("Mr. Anderson".to_owned(), u.email.to_string())
+    }
+}
+
 #[derive(Debug, Insertable)]
 #[table_name = "users"]
 pub struct NewUser<'a> {
@@ -124,21 +129,21 @@ pub struct NewUser<'a> {
 #[derive(Debug, Serialize, Deserialize)]
 struct JsonUser {
     id: UserId,
-    email: String,
+    email: EmailAddress,
     verified: bool,
     created_at: DateTime<Utc>,
 }
 
 impl From<User> for JsonUser {
-    fn from(u: User) -> Self {
-        let User {
+    fn from(
+        User {
             id,
             email,
             verified,
             created_at,
-            ..
-        } = u;
-
+            hash: _,
+        }: User,
+    ) -> Self {
         Self {
             id,
             email,
@@ -162,7 +167,7 @@ mod tests {
         let user = User {
             created_at: DateTime::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc),
             id: Uuid::nil(),
-            email: "user@example.com".into(),
+            email: "user@example.com".parse().unwrap(),
             verified: true,
             hash: "quite secret; do not share".into(),
         };
@@ -183,7 +188,7 @@ mod tests {
     fn get_user_by_email() {
         let conn = pg_test_conn();
 
-        match User::find_by_email(&conn, "nonexistentuser@example.com") {
+        match User::find_by_email(&conn, &"nonexistentuser@example.com".parse().unwrap()) {
             Err(Error::UserNotFound) => {}
             Err(other_error) => panic!("incorrect error ({})", other_error),
             Ok(_) => panic!("that user should not exist"),

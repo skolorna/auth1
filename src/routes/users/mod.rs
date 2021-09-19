@@ -9,7 +9,7 @@ use actix_web::{
 use crate::{
     client_info::ClientInfo,
     db::{postgres::PgPool, redis::RedisPool},
-    email::{send_welcome_email, SmtpConnSpec},
+    email::{send_verification_email, SmtpConnection},
     identity::Identity,
     models::{
         user::{CreateUser, UpdateUser},
@@ -23,7 +23,7 @@ use crate::{
 async fn create_user(
     pg: web::Data<PgPool>,
     redis: web::Data<RedisPool>,
-    smtp: web::Data<SmtpConnSpec>,
+    smtp: web::Data<SmtpConnection>,
     web::Json(data): web::Json<CreateUser>,
     client_info: ClientInfo,
 ) -> Result<HttpResponse> {
@@ -35,7 +35,7 @@ async fn create_user(
     let pg = pg.get()?;
     let created_user = web::block::<_, _, Error>(move || {
         let created_user = User::create(&pg, &data)?;
-        send_welcome_email(&pg, smtp.as_ref(), created_user.email.clone())?;
+        send_verification_email(smtp.as_ref(), &created_user)?;
         Ok(created_user)
     })
     .await?;

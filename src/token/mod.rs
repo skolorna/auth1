@@ -3,7 +3,7 @@ pub mod refresh_token;
 
 use std::fmt::Display;
 
-use crate::{db::postgres::PgConn, diesel::QueryDsl};
+use crate::{db::postgres::PgConn, diesel::QueryDsl, models::User, types::EmailAddress};
 use chrono::{Duration, Utc};
 use diesel::prelude::*;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
@@ -67,20 +67,12 @@ impl VerificationToken {
         Self(s.to_string())
     }
 
-    pub fn generate(conn: &PgConn, email: impl ToString) -> Result<Self> {
-        use crate::schema::users::{columns, table};
-
-        let email = email.to_string();
-        let hash: String = table
-            .select(columns::hash)
-            .filter(columns::email.eq(&email))
-            .first(conn)?;
-        // FIXME: Don't use the password hash as the secret. Please.
-        let key = EncodingKey::from_secret(hash.as_bytes());
+    pub fn generate(user: &User) -> Result<Self> {
+        let key = EncodingKey::from_secret(user.hash.as_bytes());
         let exp = Utc::now() + Duration::hours(24);
         let header = Header::new(Self::JWT_ALG);
         let claims = VerificationTokenClaims {
-            email,
+            email: user.email.to_owned(),
             exp: exp.timestamp(),
         };
         let token = jsonwebtoken::encode(&header, &claims, &key)?;
@@ -125,5 +117,5 @@ impl Display for VerificationToken {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VerificationTokenClaims {
     pub exp: i64,
-    pub email: String,
+    pub email: EmailAddress,
 }

@@ -9,7 +9,7 @@ use lettre::{
 };
 use lettre_email::{EmailBuilder, Mailbox};
 
-use crate::{db::postgres::PgConn, result::Result, token::VerificationToken};
+use crate::{models::User, result::Result, token::VerificationToken};
 
 const FROM: (&str, &str) = ("system@skolorna.com", "Skolorna");
 const REPLY_TO: &str = "hej@skolorna.com";
@@ -17,7 +17,7 @@ const REPLY_TO: &str = "hej@skolorna.com";
 type TestInbox = Vec<(Envelope, String)>;
 
 #[derive(Debug, Clone)]
-pub enum SmtpConnSpec {
+pub enum SmtpConnection {
     BasicAuth {
         host: String,
         username: String,
@@ -26,7 +26,7 @@ pub enum SmtpConnSpec {
     TestInbox(Arc<Mutex<TestInbox>>),
 }
 
-impl SmtpConnSpec {
+impl SmtpConnection {
     pub fn from_env() -> Self {
         Self::BasicAuth {
             host: env::var("SMTP_HOST").expect("SMTP_HOST is not set"),
@@ -37,7 +37,7 @@ impl SmtpConnSpec {
 
     pub fn send(&self, email: SendableEmail) -> Result<()> {
         match self {
-            SmtpConnSpec::BasicAuth {
+            SmtpConnection::BasicAuth {
                 host,
                 username,
                 password,
@@ -51,7 +51,7 @@ impl SmtpConnSpec {
 
                 Ok(())
             }
-            SmtpConnSpec::TestInbox(data) => {
+            SmtpConnection::TestInbox(data) => {
                 let mut inbox = data.lock().unwrap();
                 inbox.push((
                     email.envelope().to_owned(),
@@ -76,7 +76,7 @@ impl SmtpConnSpec {
 }
 
 pub fn send_email(
-    smtp: &SmtpConnSpec,
+    smtp: &SmtpConnection,
     mailbox: impl Into<Mailbox>,
     subject: String,
     text: String,
@@ -94,13 +94,9 @@ pub fn send_email(
     Ok(())
 }
 
-pub fn send_welcome_email(
-    db_conn: &PgConn,
-    smtp: &SmtpConnSpec,
-    mailbox: impl Into<Mailbox>,
-) -> Result<()> {
-    let mailbox: Mailbox = mailbox.into();
-    let token = VerificationToken::generate(db_conn, &mailbox.address)?;
+pub fn send_verification_email(smtp: &SmtpConnection, user: &User) -> Result<()> {
+    let mailbox: Mailbox = user.into();
+    let token = VerificationToken::generate(user)?;
 
     // FIXME: Don't use localhost...
     send_email(

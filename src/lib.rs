@@ -9,6 +9,7 @@ pub mod result;
 pub mod routes;
 pub mod schema;
 pub mod token;
+pub mod types;
 pub mod util;
 
 #[macro_use]
@@ -24,11 +25,12 @@ use db::{
     postgres::{pg_pool_from_env, PgConn, PgPool},
     redis::{redis_pool_from_env, RedisPool},
 };
-use email::SmtpConnSpec;
+use email::SmtpConnection;
 use models::User;
+use types::EmailAddress;
 
 /// Login using email and password.
-pub fn login_with_password(conn: &PgConn, email: &str, password: &str) -> Result<User> {
+pub fn login_with_password(conn: &PgConn, email: &EmailAddress, password: &str) -> Result<User> {
     let user = User::find_by_email(conn, email)?;
 
     verify_password(password.as_bytes(), &user.hash())?;
@@ -40,7 +42,7 @@ pub fn login_with_password(conn: &PgConn, email: &str, password: &str) -> Result
 pub struct Data {
     pub pg: PgPool,
     pub redis: RedisPool,
-    pub smtp: SmtpConnSpec,
+    pub smtp: SmtpConnection,
     pub client: ClientInfoConfig,
 }
 
@@ -48,7 +50,7 @@ impl Data {
     pub fn from_env() -> Self {
         Self {
             redis: redis_pool_from_env(),
-            smtp: SmtpConnSpec::from_env(),
+            smtp: SmtpConnection::from_env(),
             pg: pg_pool_from_env(),
             client: ClientInfoConfig { trust_proxy: false },
         }

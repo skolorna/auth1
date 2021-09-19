@@ -387,6 +387,7 @@ dependencies = [
  "diesel_migrations",
  "dotenv",
  "env_logger",
+ "fast_chemail",
  "futures-util",
  "jsonwebtoken",
  "lettre",
