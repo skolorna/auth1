@@ -1,5 +1,7 @@
 pub mod test_user;
 
+use std::sync::MutexGuard;
+
 use actix_web::{
     http::StatusCode,
     test::{self, TestRequest},
@@ -12,6 +14,7 @@ use auth1::{
     Data,
 };
 use dotenv::dotenv;
+use lettre::Envelope;
 use serde_json::{json, Value};
 
 use self::test_user::TestUser;
@@ -112,5 +115,13 @@ impl Server {
             }),
         )
         .await
+    }
+
+    pub fn inbox(&self) -> MutexGuard<Vec<(Envelope, String)>> {
+        self.0.smtp.get_test_inbox()
+    }
+
+    pub fn pop_email(&self) -> Option<(Envelope, String)> {
+        self.inbox().pop()
     }
 }

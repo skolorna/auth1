@@ -65,7 +65,7 @@ where
     String: FromSql<sql_types::Text, DB>,
 {
     fn from_sql(bytes: Option<&DB::RawValue>) -> diesel::deserialize::Result<Self> {
-				// Validating stored values might be problematic ...
+        // Validating stored values might be problematic ...
         String::from_sql(bytes).map(Self)
     }
 }

@@ -2,6 +2,7 @@ use std::convert::{TryFrom, TryInto};
 
 use crate::crypto::{hash_password, verify_password};
 use crate::db::postgres::PgConn;
+use crate::email::{send_verification_email, SmtpConnection};
 use crate::result::{Error, Result};
 use crate::schema::users;
 use crate::types::EmailAddress;
@@ -36,12 +37,20 @@ pub struct CreateUser {
 pub struct UpdateUser {
     pub password: String,
     pub new_password: Option<String>,
+    pub email: Option<EmailAddress>,
 }
 
-#[derive(AsChangeset)]
+#[derive(AsChangeset, Default, PartialEq, Eq)]
 #[table_name = "users"]
 struct UserChangeset {
     pub hash: Option<String>,
+    pub email: Option<EmailAddress>,
+}
+
+impl UserChangeset {
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 impl TryFrom<UpdateUser> for UserChangeset {
@@ -51,11 +60,31 @@ impl TryFrom<UpdateUser> for UserChangeset {
         let UpdateUser {
             password: _,
             new_password,
+            email,
         } = u;
 
         let hash = new_password.map_or(Ok(None), |p| hash_password(p.as_bytes()).map(Some))?;
 
-        Ok(Self { hash })
+        let cs = Self { hash, email };
+
+        if cs.is_empty() {
+            Err(Error::NoUserChanges)
+        } else {
+            Ok(cs)
+        }
+    }
+}
+
+fn map_diesel_error(err: diesel::result::Error) -> Error {
+    use diesel::result::{
+        DatabaseErrorKind,
+        Error::{DatabaseError, NotFound},
+    };
+
+    match err {
+        NotFound => Error::UserNotFound,
+        DatabaseError(DatabaseErrorKind::UniqueViolation, _) => Error::EmailInUse,
+        _ => err.into(),
     }
 }
 
@@ -65,10 +94,7 @@ impl User {
         users
             .filter(columns::email.eq(email))
             .first(conn)
-            .map_err(|e| match e {
-                diesel::result::Error::NotFound => Error::UserNotFound,
-                _ => e.into(),
-            })
+            .map_err(map_diesel_error)
     }
 
     pub fn create(conn: &PgConn, query: &CreateUser) -> Result<Self> {
@@ -83,13 +109,7 @@ impl User {
         let inserted_row = diesel::insert_into(users::table)
             .values(&new_user)
             .get_result(conn)
-            .map_err(|err| match err {
-                diesel::result::Error::DatabaseError(
-                    diesel::result::DatabaseErrorKind::UniqueViolation,
-                    _,
-                ) => Error::EmailInUse,
-                _ => err.into(),
-            })?;
+            .map_err(map_diesel_error)?;
 
         Ok(inserted_row)
     }
@@ -99,12 +119,19 @@ impl User {
     }
 
     /// Update the user while verifying that the password is correct.
-    pub fn update(&self, pg: &PgConn, update: UpdateUser) -> Result<Self> {
+    pub fn update(&self, smtp: &SmtpConnection, pg: &PgConn, update: UpdateUser) -> Result<Self> {
         verify_password(update.password.as_bytes(), &self.hash())?;
 
         let cs: UserChangeset = update.try_into()?;
 
-        let result = diesel::update(self).set(cs).get_result::<Self>(pg)?;
+        let result = diesel::update(self)
+            .set(cs)
+            .get_result::<Self>(pg)
+            .map_err(map_diesel_error)?;
+
+        if result.email != self.email {
+            send_verification_email(smtp, &result)?;
+        }
 
         Ok(result)
     }

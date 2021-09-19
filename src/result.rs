@@ -11,6 +11,9 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("email already verified")]
+    AlreadyVerified,
+
     #[error("database error: {0}")]
     DieselError(#[from] diesel::result::Error),
 
@@ -46,30 +49,24 @@ pub enum Error {
 
     #[error("user not found")]
     UserNotFound,
+
+    #[error("no user changes specified")]
+    NoUserChanges,
 }
 
 impl ResponseError for Error {
     fn status_code(&self) -> actix_web::http::StatusCode {
         use Error::{
-            DieselError, EmailFailed, EmailInUse, InternalError, InvalidCredentials, InvalidEmail,
-            KeyNotFound, MissingToken, RateLimitExceeded, RedisError, SmtpError, UserNotFound,
+            AlreadyVerified, DieselError, EmailFailed, EmailInUse, InternalError,
+            InvalidCredentials, InvalidEmail, KeyNotFound, MissingToken, NoUserChanges,
+            RateLimitExceeded, RedisError, SmtpError, UserNotFound,
         };
 
         match self {
+            AlreadyVerified => StatusCode::BAD_REQUEST,
             InvalidCredentials => StatusCode::FORBIDDEN,
             InternalError => StatusCode::INTERNAL_SERVER_ERROR,
-            DieselError(ref err) => {
-                use diesel::result::{
-                    DatabaseErrorKind,
-                    Error::{DatabaseError, NotFound},
-                };
-
-                match err {
-                    DatabaseError(DatabaseErrorKind::UniqueViolation, _) => StatusCode::CONFLICT,
-                    NotFound => StatusCode::NOT_FOUND,
-                    _ => StatusCode::INTERNAL_SERVER_ERROR,
-                }
-            }
+            DieselError(_err) => StatusCode::INTERNAL_SERVER_ERROR,
             EmailInUse => StatusCode::CONFLICT,
             UserNotFound => StatusCode::NOT_FOUND,
             MissingToken => StatusCode::UNAUTHORIZED,
@@ -79,6 +76,7 @@ impl ResponseError for Error {
             KeyNotFound => StatusCode::NOT_FOUND,
             RedisError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
+            NoUserChanges => StatusCode::BAD_REQUEST,
         }
     }
 

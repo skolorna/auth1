@@ -9,7 +9,7 @@ use lettre::{
 };
 use lettre_email::{EmailBuilder, Mailbox};
 
-use crate::{models::User, result::Result, token::VerificationToken};
+use crate::{models::User, rate_limit::SlidingWindow, result::Result, token::VerificationToken};
 
 const FROM: (&str, &str) = ("system@skolorna.com", "Skolorna");
 const REPLY_TO: &str = "hej@skolorna.com";
@@ -116,3 +116,5 @@ Tryck p\u{e5} l\u{e4}nken nedan f\u{f6}r att bekr\u{e4}fta din e-postadress:
 
     Ok(())
 }
+
+pub const EMAIL_RATE_LIMIT: SlidingWindow = SlidingWindow::new("send_email", 3600, 10);

@@ -1,3 +1,4 @@
+mod email;
 mod update;
 
 use std::str::FromStr;
@@ -135,10 +136,7 @@ async fn test_login(
 }
 
 async fn test_verify_email(server: &Server, email: &str) {
-    let (email_envelope, email_message) = {
-        let mut inbox = server.0.smtp.get_test_inbox();
-        inbox.pop().unwrap()
-    };
+    let (email_envelope, email_message) = server.pop_email().unwrap();
     let recipients = email_envelope.to();
     assert_eq!(recipients, [EmailAddress::from_str(email).unwrap()],);
     let jwt_re = Regex::new(r"[0-9a-zA-Z_-]+\.[0-9a-zA-Z_-]+\.[0-9a-zA-Z_-]+").unwrap();

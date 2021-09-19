@@ -52,7 +52,7 @@ impl Data {
             redis: redis_pool_from_env(),
             smtp: SmtpConnection::from_env(),
             pg: pg_pool_from_env(),
-            client: ClientInfoConfig { trust_proxy: false },
+            client: ClientInfoConfig { trust_proxy: true },
         }
     }
 }

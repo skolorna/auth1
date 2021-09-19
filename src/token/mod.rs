@@ -90,7 +90,7 @@ impl VerificationToken {
             .first(conn)?;
 
         if already_verified {
-            return Err(Error::InvalidCredentials);
+            return Err(Error::AlreadyVerified);
         }
 
         let key = DecodingKey::from_secret(hash.as_bytes());

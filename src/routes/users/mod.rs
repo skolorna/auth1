@@ -55,8 +55,9 @@ async fn patch_me(
     ident: Identity,
     web::Json(info): web::Json<UpdateUser>,
     pool: web::Data<PgPool>,
+    smtp: web::Data<SmtpConnection>,
 ) -> Result<HttpResponse> {
-    let result = web::block(move || ident.user.update(&pool.get()?, info)).await?;
+    let result = web::block(move || ident.user.update(&smtp, &pool.get()?, info)).await?;
 
     Ok(HttpResponse::Ok().json(result))
 }
