@@ -1,6 +1,6 @@
 [package]
 name = "auth1"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -21,7 +21,8 @@ jsonwebtoken = "7.2.0"
 lettre = "0.9.6"
 lettre_email = "0.9.4"
 once_cell = "1.8.0"
-openssl = "0.10.35"
+# Needed for Postgres
+openssl = "*"
 pbkdf2 = "0.8.0"
 r2d2 = "0.8.9"
 r2d2_redis = "0.14.0"

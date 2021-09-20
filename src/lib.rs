@@ -12,6 +12,9 @@ pub mod token;
 pub mod types;
 pub mod util;
 
+// Hopefully this makes Diesel work in Docker
+extern crate openssl;
+
 #[macro_use]
 extern crate diesel;
 
