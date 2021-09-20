@@ -39,36 +39,36 @@ pub fn login_with_password(conn: &PgConn, email: &EmailAddress, password: &str) 
 }
 
 #[derive(Clone)]
-pub struct Data {
+pub struct AppConfig {
     pub pg: PgPool,
     pub redis: RedisPool,
     pub smtp: SmtpConnection,
     pub client: ClientInfoConfig,
 }
 
-impl Data {
+impl AppConfig {
     pub fn from_env() -> Self {
         Self {
             redis: redis_pool_from_env(),
             smtp: SmtpConnection::from_env(),
             pg: pg_pool_from_env(),
-            client: ClientInfoConfig { trust_proxy: true },
+            client: ClientInfoConfig::from_env(),
         }
     }
 }
 
 #[macro_export]
 macro_rules! create_app {
-    ($data:expr) => {{
+    ($config:expr) => {{
         use actix_web::middleware::{normalize, Logger};
         use actix_web::{web, App};
 
-        let auth1::Data {
+        let auth1::AppConfig {
             pg,
             smtp,
             redis,
             client,
-        } = $data;
+        } = $config;
 
         App::new()
             .data(pg)

@@ -1,4 +1,5 @@
 use std::{
+    env,
     fmt::Display,
     net::{IpAddr, Ipv4Addr},
     pin::Pin,
@@ -17,8 +18,16 @@ pub struct ClientInfoConfig {
 const DEFAULT_CONFIG: ClientInfoConfig = ClientInfoConfig { trust_proxy: false };
 
 impl ClientInfoConfig {
-    fn from_req(req: &HttpRequest) -> &Self {
+    pub fn from_req(req: &HttpRequest) -> &Self {
         req.app_data::<Self>().unwrap_or(&DEFAULT_CONFIG)
+    }
+
+    pub fn from_env() -> Self {
+        Self {
+            trust_proxy: env::var("TRUST_PROXY")
+                .map(|s| s.parse().expect("TRUST_PROXY is not a boolean value"))
+                .unwrap_or(false),
+        }
     }
 }
 

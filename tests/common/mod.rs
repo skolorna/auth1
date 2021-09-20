@@ -11,7 +11,7 @@ use auth1::{
     create_app,
     db::{postgres::pg_pool_from_env, redis::redis_pool_from_env},
     email::SmtpConnection,
-    Data,
+    AppConfig,
 };
 use dotenv::dotenv;
 use lettre::Envelope;
@@ -21,13 +21,13 @@ use self::test_user::TestUser;
 
 pub type TestResponse = (Value, StatusCode);
 
-pub struct Server(pub Data);
+pub struct Server(pub AppConfig);
 
 impl Server {
     pub fn new() -> Self {
         dotenv().ok();
 
-        Self(Data {
+        Self(AppConfig {
             redis: redis_pool_from_env(),
             pg: pg_pool_from_env(),
             smtp: SmtpConnection::new_test_inbox(),
