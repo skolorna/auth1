@@ -5,7 +5,7 @@ use crate::db::postgres::PgConn;
 use crate::email::{send_verification_email, SmtpConnection};
 use crate::result::{Error, Result};
 use crate::schema::users;
-use crate::types::EmailAddress;
+use crate::types::{EmailAddress, PersonalName};
 
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
@@ -24,6 +24,7 @@ pub struct User {
     pub verified: bool,
     pub hash: String,
     pub created_at: DateTime<Utc>,
+    pub full_name: PersonalName,
 }
 
 #[non_exhaustive]
@@ -31,6 +32,7 @@ pub struct User {
 pub struct CreateUser {
     pub email: EmailAddress,
     pub password: String,
+    pub full_name: PersonalName,
 }
 
 #[derive(Debug, Deserialize)]
@@ -38,6 +40,7 @@ pub struct UpdateUser {
     pub password: String,
     pub new_password: Option<String>,
     pub email: Option<EmailAddress>,
+    pub full_name: Option<PersonalName>,
 }
 
 #[derive(AsChangeset, Default, PartialEq, Eq)]
@@ -45,6 +48,7 @@ pub struct UpdateUser {
 struct UserChangeset {
     pub hash: Option<String>,
     pub email: Option<EmailAddress>,
+    pub full_name: Option<PersonalName>,
 }
 
 impl UserChangeset {
@@ -61,11 +65,16 @@ impl TryFrom<UpdateUser> for UserChangeset {
             password: _,
             new_password,
             email,
+            full_name,
         } = u;
 
         let hash = new_password.map_or(Ok(None), |p| hash_password(p.as_bytes()).map(Some))?;
 
-        let cs = Self { hash, email };
+        let cs = Self {
+            hash,
+            email,
+            full_name,
+        };
 
         if cs.is_empty() {
             Err(Error::NoUserChanges)
@@ -102,8 +111,9 @@ impl User {
 
         let new_user = NewUser {
             id: Uuid::new_v4(),
-            email: &query.email.to_string(),
+            email: query.email.as_str(),
             hash: &hash,
+            full_name: query.full_name.as_str(),
         };
 
         let inserted_row = diesel::insert_into(users::table)
@@ -135,11 +145,9 @@ impl User {
 
         Ok(result)
     }
-}
 
-impl From<&User> for Mailbox {
-    fn from(u: &User) -> Self {
-        Mailbox::new_with_name("Mr. Anderson".to_owned(), u.email.to_string())
+    pub fn mailbox(&self) -> Mailbox {
+        Mailbox::new_with_name(self.full_name.to_string(), self.email.to_string())
     }
 }
 
@@ -149,6 +157,7 @@ pub struct NewUser<'a> {
     pub id: UserId,
     pub email: &'a str,
     pub hash: &'a str,
+    pub full_name: &'a str,
 }
 
 /// Public-facing version of [User], excluding sensitive data
@@ -159,6 +168,7 @@ struct JsonUser {
     email: EmailAddress,
     verified: bool,
     created_at: DateTime<Utc>,
+    full_name: PersonalName,
 }
 
 impl From<User> for JsonUser {
@@ -168,6 +178,7 @@ impl From<User> for JsonUser {
             email,
             verified,
             created_at,
+            full_name,
             hash: _,
         }: User,
     ) -> Self {
@@ -176,6 +187,7 @@ impl From<User> for JsonUser {
             email,
             verified,
             created_at,
+            full_name,
         }
     }
 }
@@ -197,6 +209,7 @@ mod tests {
             email: "user@example.com".parse().unwrap(),
             verified: true,
             hash: "quite secret; do not share".into(),
+            full_name: "Jay Gatsby".parse().unwrap(),
         };
 
         let serialized = serde_json::to_value(&user).unwrap();
@@ -204,7 +217,8 @@ mod tests {
             "id": Uuid::nil(),
             "email": "user@example.com",
             "verified": true,
-            "created_at": "1970-01-01T00:00:00Z"
+            "created_at": "1970-01-01T00:00:00Z",
+            "full_name": "Jay Gatsby"
         });
 
         assert_eq!(serialized, expected);

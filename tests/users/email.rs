@@ -7,13 +7,17 @@ use crate::common::Server;
 async fn update_email() {
     let server = Server::new();
 
-    let alice = server.create_user("alice@example.com", "hunter4").await;
+    let alice = server
+        .create_user("Alice", "alice@example.com", "hunter4")
+        .await;
 
     // Expect one verification email
     assert!(server.pop_email().is_some());
     assert!(server.pop_email().is_none());
 
-    let _bob = server.create_user("bob@example.com", "bobrocks").await;
+    let _bob = server
+        .create_user("Bob", "bob@example.com", "bobrocks")
+        .await;
 
     // Expect one verification email
     assert!(server.pop_email().is_some());

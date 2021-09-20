@@ -16,6 +16,7 @@ table! {
         verified -> Bool,
         hash -> Text,
         created_at -> Timestamptz,
+        full_name -> Text,
     }
 }
 

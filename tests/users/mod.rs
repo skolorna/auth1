@@ -32,6 +32,7 @@ async fn create_user_and_login() {
     let user1 = json!({
         "email": "user1@example.com",
         "password": "d0ntpwnm3",
+        "full_name": "User no. 1"
     });
     let (res, status) = server.post_json("/users", user1.clone()).await;
     assert_eq!(

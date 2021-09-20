@@ -12,6 +12,12 @@ use serde::{de, Deserialize, Deserializer, Serialize};
 #[sql_type = "diesel::sql_types::Text"]
 pub struct EmailAddress(String);
 
+impl EmailAddress {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 impl FromStr for EmailAddress {
     type Err = fast_chemail::ParseError;
 

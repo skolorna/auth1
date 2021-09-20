@@ -8,7 +8,7 @@ async fn change_password() {
     let server = Server::new();
 
     let email = "passwordupdate@example.com";
-    let user = server.create_user(email, "weakpassword").await;
+    let user = server.create_user("Neo", email, "weakpassword").await;
 
     let req = user
         .req()

@@ -1,2 +1,3 @@
 -- This file should undo anything in `up.sql`
-DROP TABLE IF EXISTS users;
+ALTER TABLE
+	users DROP COLUMN full_name;

@@ -95,13 +95,12 @@ pub fn send_email(
 }
 
 pub fn send_verification_email(smtp: &SmtpConnection, user: &User) -> Result<()> {
-    let mailbox: Mailbox = user.into();
     let token = VerificationToken::generate(user)?;
 
     // FIXME: Don't use localhost...
     send_email(
         smtp,
-        mailbox,
+        user.mailbox(),
         "Bekr\u{e4}fta din e-postadress".into(),
         format!(
             "\

@@ -83,11 +83,12 @@ impl Server {
         (body.to_vec(), status_code)
     }
 
-    pub async fn create_user(&self, email: &str, password: &str) -> TestUser {
+    pub async fn create_user(&self, full_name: &str, email: &str, password: &str) -> TestUser {
         let (_, status) = self
             .post_json(
                 "/users",
                 json!({
+                    "full_name": full_name,
                     "email": email,
                     "password": password,
                 }),
