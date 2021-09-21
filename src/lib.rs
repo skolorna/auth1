@@ -65,6 +65,7 @@ macro_rules! create_app {
     ($config:expr) => {{
         use actix_web::middleware::{normalize, Logger};
         use actix_web::{web, App};
+        use actix_cors::Cors;
 
         let auth1::AppConfig {
             pg,
@@ -72,6 +73,8 @@ macro_rules! create_app {
             redis,
             client,
         } = $config;
+
+        let cors = Cors::default().allowed_origin("http://localhost:3000");
 
         App::new()
             .data(pg)
@@ -82,6 +85,7 @@ macro_rules! create_app {
                 web::JsonConfig::default()
                     .error_handler(|err, _req| actix_web::error::ErrorBadRequest(err)),
             )
+            .wrap(cors)
             .wrap(normalize::NormalizePath::new(
                 normalize::TrailingSlash::Trim,
             ))
