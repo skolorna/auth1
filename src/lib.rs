@@ -78,7 +78,9 @@ macro_rules! create_app {
             client,
         } = $config;
 
-        let cors = Cors::default().allowed_origin("http://localhost:3000");
+        let cors = Cors::default()
+            .allowed_origin("http://localhost:3000")
+            .allow_any_method();
 
         App::new()
             .data(pg)
