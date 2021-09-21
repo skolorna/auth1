@@ -5,7 +5,7 @@ use crate::db::postgres::PgConn;
 use crate::email::{send_verification_email, SmtpConnection};
 use crate::result::{Error, Result};
 use crate::schema::users;
-use crate::types::{EmailAddress, PersonalName};
+use crate::types::{EmailAddress, Password, PersonalName};
 
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
@@ -31,14 +31,14 @@ pub struct User {
 #[derive(Debug, Deserialize)]
 pub struct CreateUser {
     pub email: EmailAddress,
-    pub password: String,
+    pub password: Password,
     pub full_name: PersonalName,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateUser {
-    pub password: String,
-    pub new_password: Option<String>,
+    pub password: Password,
+    pub new_password: Option<Password>,
     pub email: Option<EmailAddress>,
     pub full_name: Option<PersonalName>,
 }

@@ -8,12 +8,12 @@ use crate::login_with_password;
 use crate::models::Session;
 use crate::rate_limit::{RateLimit, SlidingWindow};
 use crate::result::Result;
-use crate::types::EmailAddress;
+use crate::types::{EmailAddress, Password};
 
 #[derive(Debug, Deserialize)]
 struct LoginRequest {
     pub email: EmailAddress,
-    pub password: String,
+    pub password: Password,
 }
 
 #[post("")]

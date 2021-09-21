@@ -8,7 +8,7 @@ async fn update_email() {
     let server = Server::new();
 
     let alice = server
-        .create_user("Alice", "alice@example.com", "hunter4")
+        .create_user("Alice", "alice@example.com", "hunter4$$")
         .await;
 
     // Expect one verification email
@@ -28,7 +28,7 @@ async fn update_email() {
         .method(Method::PATCH)
         .uri("/users/@me")
         .set_json(&json!({
-                "password": "hunter4",
+                "password": "hunter4$$",
                 "email": "bob@example.com"
         }));
     let (_, status) = server.send_json(req).await;
@@ -39,7 +39,7 @@ async fn update_email() {
         .method(Method::PATCH)
         .uri("/users/@me")
         .set_json(&json!({
-            "password": "hunter4",
+            "password": "hunter4$$",
             "email": "coolalice@example.com"
         }));
     let (res, status) = server.send_json(req).await;

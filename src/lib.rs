@@ -30,10 +30,14 @@ use db::{
 };
 use email::SmtpConnection;
 use models::User;
-use types::EmailAddress;
+use types::{EmailAddress, Password};
 
 /// Login using email and password.
-pub fn login_with_password(conn: &PgConn, email: &EmailAddress, password: &str) -> Result<User> {
+pub fn login_with_password(
+    conn: &PgConn,
+    email: &EmailAddress,
+    password: &Password,
+) -> Result<User> {
     let user = User::find_by_email(conn, email)?;
 
     verify_password(password.as_bytes(), &user.hash())?;
@@ -63,9 +67,9 @@ impl AppConfig {
 #[macro_export]
 macro_rules! create_app {
     ($config:expr) => {{
+        use actix_cors::Cors;
         use actix_web::middleware::{normalize, Logger};
         use actix_web::{web, App};
-        use actix_cors::Cors;
 
         let auth1::AppConfig {
             pg,
