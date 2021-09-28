@@ -6,7 +6,10 @@ use actix_web::{
     patch, web, HttpResponse,
 };
 
-use crate::{db::postgres::PgPool, email::Emails, errors::AppResult, identity::Identity, models::user::UpdateUser};
+use crate::{
+    db::postgres::PgPool, email::Emails, errors::AppResult, identity::Identity,
+    models::user::UpdateUser,
+};
 
 #[get("/@me")]
 async fn get_me(ident: Identity) -> AppResult<HttpResponse> {

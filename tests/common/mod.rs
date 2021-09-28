@@ -96,7 +96,7 @@ impl Server {
         assert_eq!(
             status,
             StatusCode::CREATED,
-            "failed to create user {}",
+            "failed to create user {} (did you clean your database?)",
             email
         );
 

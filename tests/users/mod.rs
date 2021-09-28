@@ -134,7 +134,11 @@ async fn test_login(
 }
 
 async fn test_verify_email(server: &Server, email: &str) {
-    let StoredEmail { to, subject: _, body } = server.pop_mail().unwrap();
+    let StoredEmail {
+        to,
+        subject: _,
+        body,
+    } = server.pop_mail().unwrap();
     assert_eq!(to, email);
     let jwt_re = Regex::new(r"[0-9a-zA-Z_-]+\.[0-9a-zA-Z_-]+\.[0-9a-zA-Z_-]+").unwrap();
     let verification_token = jwt_re.find(&body).unwrap().as_str();

@@ -2,7 +2,7 @@ use std::convert::{TryFrom, TryInto};
 
 use crate::crypto::{hash_password, verify_password};
 use crate::db::postgres::PgConn;
-use crate::email::{Emails};
+use crate::email::Emails;
 use crate::errors::{AppResult, Error};
 use crate::schema::users;
 use crate::token::VerificationToken;
@@ -112,7 +112,7 @@ impl User {
     }
 
     /// Update the user while verifying that the password is correct.
-    pub fn update(&self, _emails: &Emails, pg: &PgConn, update: UpdateUser) -> AppResult<Self> {
+    pub fn update(&self, emails: &Emails, pg: &PgConn, update: UpdateUser) -> AppResult<Self> {
         verify_password(update.password.as_bytes(), &self.hash())?;
 
         let cs: UserChangeset = update.try_into()?;
@@ -123,7 +123,8 @@ impl User {
             .map_err(map_diesel_error)?;
 
         if result.email != self.email {
-            todo!();
+            let token = VerificationToken::generate(&result)?;
+            let _ = emails.send_user_confirmation(&result, token);
         }
 
         Ok(result)
@@ -155,11 +156,11 @@ impl<'a> NewUser<'a> {
         })
     }
 
-    pub fn create(&self, conn: &PgConn, emails: &Emails) -> QueryResult<User> {
+    pub fn create(&self, conn: &PgConn, emails: &Emails) -> AppResult<User> {
         conn.transaction(|| {
             let user: User = insert_into(users::table).values(self).get_result(conn)?;
-
-            let _ = emails.send_user_confirmation(&user, VerificationToken::new("abc123"));
+            let token = VerificationToken::generate(&user)?;
+            let _ = emails.send_user_confirmation(&user, token);
 
             Ok(user)
         })
