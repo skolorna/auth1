@@ -1,6 +1,7 @@
 pub mod keys;
 pub mod login;
 pub mod refresh;
+pub mod register;
 pub mod users;
 pub mod verify;
 
@@ -34,5 +35,6 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(web::scope("/login").configure(login::configure))
         .service(web::scope("/keys").configure(keys::configure))
         .service(web::scope("/verify").configure(verify::configure))
-        .service(web::scope("/refresh").configure(refresh::configure));
+        .service(web::scope("/refresh").configure(refresh::configure))
+        .service(web::scope("/register").configure(register::configure));
 }

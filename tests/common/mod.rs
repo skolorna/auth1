@@ -86,7 +86,7 @@ impl Server {
     pub async fn create_user(&self, full_name: &str, email: &str, password: &str) -> TestUser {
         let (_, status) = self
             .post_json(
-                "/users",
+                "/register",
                 json!({
                     "full_name": full_name,
                     "email": email,

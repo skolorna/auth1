@@ -34,7 +34,7 @@ async fn create_user_and_login() {
         "password": "d0ntpwnm3",
         "full_name": "User no. 1"
     });
-    let (res, status) = server.post_json("/users", user1.clone()).await;
+    let (res, status) = server.post_json("/register", user1.clone()).await;
     assert_eq!(
         status,
         StatusCode::CREATED,
@@ -43,7 +43,7 @@ async fn create_user_and_login() {
     let uid = res["id"].as_str().unwrap();
 
     // Email addresses are not reusable!
-    let (_, status) = server.post_json("/users", user1).await;
+    let (_, status) = server.post_json("/register", user1).await;
     assert_eq!(status, StatusCode::CONFLICT);
 
     let (access_token, refresh_token) =
