@@ -20,8 +20,8 @@ pub enum Error {
     #[error("redis error")]
     RedisError(#[from] RedisError),
 
-    #[error("failed to compose email")]
-    EmailFailed(#[from] lettre_email::error::Error),
+    #[error("lettre failed")]
+    LettreError(#[from] lettre::error::Error),
 
     #[error("email already in use")]
     EmailInUse,
@@ -41,8 +41,8 @@ pub enum Error {
     #[error("the token is missing or cannot be parsed")]
     MissingToken,
 
-    #[error("email delivery failed")]
-    SmtpError(#[from] lettre::smtp::error::Error),
+    #[error("smtp transport error")]
+    SmtpError(#[from] lettre::transport::smtp::Error),
 
     #[error("rate limit exceeded")]
     RateLimitExceeded { retry_after: Option<Duration> },
@@ -57,9 +57,9 @@ pub enum Error {
 impl ResponseError for Error {
     fn status_code(&self) -> actix_web::http::StatusCode {
         use Error::{
-            AlreadyVerified, DieselError, EmailFailed, EmailInUse, InternalError,
-            InvalidCredentials, InvalidEmail, KeyNotFound, MissingToken, NoUserChanges,
-            RateLimitExceeded, RedisError, SmtpError, UserNotFound,
+            AlreadyVerified, DieselError, EmailInUse, InternalError, InvalidCredentials,
+            InvalidEmail, KeyNotFound, LettreError, MissingToken, NoUserChanges, RateLimitExceeded,
+            RedisError, SmtpError, UserNotFound,
         };
 
         match self {
@@ -70,12 +70,12 @@ impl ResponseError for Error {
             EmailInUse => StatusCode::CONFLICT,
             UserNotFound => StatusCode::NOT_FOUND,
             MissingToken => StatusCode::UNAUTHORIZED,
-            EmailFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            SmtpError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            LettreError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             InvalidEmail => StatusCode::BAD_REQUEST,
             KeyNotFound => StatusCode::NOT_FOUND,
             RedisError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
+            SmtpError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             NoUserChanges => StatusCode::BAD_REQUEST,
         }
     }
@@ -143,4 +143,4 @@ impl From<jsonwebtoken::errors::Error> for Error {
     }
 }
 
-pub type Result<T> = core::result::Result<T, Error>;
+pub type AppResult<T> = Result<T, Error>;

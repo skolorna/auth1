@@ -2,10 +2,10 @@ pub mod client_info;
 pub mod crypto;
 pub mod db;
 pub mod email;
+pub mod errors;
 pub mod identity;
 pub mod models;
 pub mod rate_limit;
-pub mod result;
 pub mod routes;
 pub mod schema;
 pub mod token;
@@ -21,14 +21,14 @@ extern crate diesel;
 #[macro_use]
 extern crate diesel_migrations;
 
-use crate::result::Result;
+use crate::errors::AppResult;
 use client_info::ClientInfoConfig;
 use crypto::verify_password;
 use db::{
     postgres::{pg_pool_from_env, PgConn, PgPool},
     redis::{redis_pool_from_env, RedisPool},
 };
-use email::SmtpConnection;
+use email::Emails;
 use models::User;
 use types::{EmailAddress, Password};
 
@@ -37,7 +37,7 @@ pub fn login_with_password(
     conn: &PgConn,
     email: &EmailAddress,
     password: &Password,
-) -> Result<User> {
+) -> AppResult<User> {
     let user = User::find_by_email(conn, email)?;
 
     verify_password(password.as_bytes(), &user.hash())?;
@@ -49,7 +49,7 @@ pub fn login_with_password(
 pub struct AppConfig {
     pub pg: PgPool,
     pub redis: RedisPool,
-    pub smtp: SmtpConnection,
+    pub emails: Emails,
     pub client: ClientInfoConfig,
 }
 
@@ -57,7 +57,7 @@ impl AppConfig {
     pub fn from_env() -> Self {
         Self {
             redis: redis_pool_from_env(),
-            smtp: SmtpConnection::from_env(),
+            emails: Emails::from_env(),
             pg: pg_pool_from_env(),
             client: ClientInfoConfig::from_env(),
         }
@@ -73,7 +73,7 @@ macro_rules! create_app {
 
         let auth1::AppConfig {
             pg,
-            smtp,
+            emails,
             redis,
             client,
         } = $config;
@@ -86,7 +86,7 @@ macro_rules! create_app {
         App::new()
             .data(pg)
             .data(redis)
-            .data(smtp)
+            .data(emails)
             .app_data(client)
             .app_data(
                 web::JsonConfig::default()

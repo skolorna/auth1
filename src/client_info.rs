@@ -8,7 +8,7 @@ use std::{
 use actix_web::{FromRequest, HttpRequest};
 use futures_util::Future;
 
-use crate::result::Error;
+use crate::errors::Error;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ClientInfoConfig {
@@ -44,7 +44,7 @@ pub struct ClientInfo {
 
 impl FromRequest for ClientInfo {
     type Error = Error;
-    type Future = Pin<Box<dyn Future<Output = core::result::Result<Self, Error>>>>;
+    type Future = Pin<Box<dyn Future<Output = Result<Self, Error>>>>;
     type Config = ClientInfoConfig;
 
     fn from_request(req: &HttpRequest, _: &mut actix_web::dev::Payload) -> Self::Future {

@@ -2,8 +2,8 @@ use std::pin::Pin;
 
 use crate::{
     db::postgres::PgPool,
+    errors::Error,
     models::User,
-    result::Error,
     token::{AccessToken, AccessTokenClaims},
 };
 
@@ -23,7 +23,7 @@ pub struct Identity {
 
 impl FromRequest for Identity {
     type Error = Error;
-    type Future = Pin<Box<dyn Future<Output = core::result::Result<Self, Error>>>>;
+    type Future = Pin<Box<dyn Future<Output = Result<Self, Error>>>>;
     type Config = ();
 
     fn from_request(req: &actix_web::HttpRequest, _: &mut actix_web::dev::Payload) -> Self::Future {

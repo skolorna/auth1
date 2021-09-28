@@ -10,8 +10,8 @@ use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    errors::{AppResult, Error},
     models::{session::SessionId, user::UserId, Session},
-    result::{Error, Result},
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -35,7 +35,7 @@ impl AccessToken {
 
     /// Verify and decode a JWT with relatively descriptive errors. **The errors should be made more opaque before
     /// arriving at the user.**
-    pub fn verify_and_decode(&self, conn: &PgConn) -> Result<AccessTokenClaims> {
+    pub fn verify_and_decode(&self, conn: &PgConn) -> AppResult<AccessTokenClaims> {
         let header = jsonwebtoken::decode_header(&self.0)?;
         let kid: SessionId = header
             .kid
@@ -67,7 +67,7 @@ impl VerificationToken {
         Self(s.to_string())
     }
 
-    pub fn generate(user: &User) -> Result<Self> {
+    pub fn generate(user: &User) -> AppResult<Self> {
         let key = EncodingKey::from_secret(user.hash.as_bytes());
         let exp = Utc::now() + Duration::hours(24);
         let header = Header::new(Self::JWT_ALG);
@@ -80,7 +80,7 @@ impl VerificationToken {
         Ok(Self::new(token))
     }
 
-    pub fn verify(&self, conn: &PgConn) -> Result<()> {
+    pub fn verify(&self, conn: &PgConn) -> AppResult<()> {
         use crate::schema::users::{columns, table};
 
         let data = jsonwebtoken::dangerous_insecure_decode::<VerificationTokenClaims>(&self.0)?;

@@ -12,16 +12,16 @@ async fn update_email() {
         .await;
 
     // Expect one verification email
-    assert!(server.pop_email().is_some());
-    assert!(server.pop_email().is_none());
+    assert!(server.pop_mail().is_some());
+    assert!(server.pop_mail().is_none());
 
     let _bob = server
         .create_user("Bob", "bob@example.com", "bobrocks")
         .await;
 
     // Expect one verification email
-    assert!(server.pop_email().is_some());
-    assert!(server.pop_email().is_none());
+    assert!(server.pop_mail().is_some());
+    assert!(server.pop_mail().is_none());
 
     let req = alice
         .req()
@@ -48,14 +48,14 @@ async fn update_email() {
     assert_eq!(res["verified"].as_bool(), Some(false));
 
     // Email verification request
-    assert!(server.pop_email().is_some());
-    assert!(server.pop_email().is_none());
+    assert!(server.pop_mail().is_some());
+    assert!(server.pop_mail().is_none());
 
     let req = alice.req().method(Method::POST).uri("/verify/resend");
     let (res, status) = server.send(req).await;
     assert!(res.is_empty());
     assert_eq!(status, StatusCode::NO_CONTENT);
 
-    assert!(server.pop_email().is_some());
-    assert!(server.pop_email().is_none());
+    assert!(server.pop_mail().is_some());
+    assert!(server.pop_mail().is_none());
 }

@@ -6,13 +6,10 @@ use actix_web::{
     patch, web, HttpResponse,
 };
 
-use crate::{
-    db::postgres::PgPool, email::SmtpConnection, identity::Identity, models::user::UpdateUser,
-    result::Result,
-};
+use crate::{db::postgres::PgPool, email::Emails, errors::AppResult, identity::Identity, models::user::UpdateUser};
 
 #[get("/@me")]
-async fn get_me(ident: Identity) -> Result<HttpResponse> {
+async fn get_me(ident: Identity) -> AppResult<HttpResponse> {
     Ok(HttpResponse::Ok()
         .set(CacheControl(vec![CacheDirective::Private]))
         .json(ident.user))
@@ -23,9 +20,9 @@ async fn patch_me(
     ident: Identity,
     web::Json(info): web::Json<UpdateUser>,
     pool: web::Data<PgPool>,
-    smtp: web::Data<SmtpConnection>,
-) -> Result<HttpResponse> {
-    let result = web::block(move || ident.user.update(&smtp, &pool.get()?, info)).await?;
+    emails: web::Data<Emails>,
+) -> AppResult<HttpResponse> {
+    let result = web::block(move || ident.user.update(emails.as_ref(), &pool.get()?, info)).await?;
 
     Ok(HttpResponse::Ok().json(result))
 }

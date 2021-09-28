@@ -1,12 +1,9 @@
 mod email;
 mod update;
 
-use std::str::FromStr;
-
 use actix_web::{http::StatusCode, test};
-use auth1::{create_app, token::AccessTokenClaims};
+use auth1::{create_app, email::StoredEmail, token::AccessTokenClaims};
 use jsonwebtoken::{DecodingKey, Validation};
-use lettre::EmailAddress;
 use regex::Regex;
 use serde_json::{json, Value};
 
@@ -137,11 +134,10 @@ async fn test_login(
 }
 
 async fn test_verify_email(server: &Server, email: &str) {
-    let (email_envelope, email_message) = server.pop_email().unwrap();
-    let recipients = email_envelope.to();
-    assert_eq!(recipients, [EmailAddress::from_str(email).unwrap()],);
+    let StoredEmail { to, subject: _, body } = server.pop_mail().unwrap();
+    assert_eq!(to, email);
     let jwt_re = Regex::new(r"[0-9a-zA-Z_-]+\.[0-9a-zA-Z_-]+\.[0-9a-zA-Z_-]+").unwrap();
-    let verification_token = jwt_re.find(&email_message).unwrap().as_str();
+    let verification_token = jwt_re.find(&body).unwrap().as_str();
 
     let (res, status) = server
         .post(

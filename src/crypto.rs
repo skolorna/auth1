@@ -1,6 +1,6 @@
 use pbkdf2::password_hash::PasswordVerifier;
 
-use crate::result::{Error, Result};
+use crate::errors::{AppResult, Error};
 
 /// Hash and salt a password.
 /// ```
@@ -12,7 +12,7 @@ use crate::result::{Error, Result};
 ///
 /// # Errors
 /// The function throws an error if the hashing fails.
-pub fn hash_password(password: &[u8]) -> Result<String> {
+pub fn hash_password(password: &[u8]) -> AppResult<String> {
     use pbkdf2::{
         password_hash::{PasswordHasher, SaltString},
         Pbkdf2,
@@ -45,6 +45,6 @@ pub fn hash_password(password: &[u8]) -> Result<String> {
 pub fn verify_password(
     password: &[u8],
     hash: &pbkdf2::password_hash::PasswordHash,
-) -> core::result::Result<(), pbkdf2::password_hash::Error> {
+) -> Result<(), pbkdf2::password_hash::Error> {
     pbkdf2::Pbkdf2.verify_password(password, hash)
 }

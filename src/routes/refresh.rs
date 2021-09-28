@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     db::postgres::PgPool,
-    result::Result,
+    errors::AppResult,
     token::{refresh_token::RefreshToken, AccessToken},
 };
 
@@ -21,7 +21,7 @@ struct RefreshAccessTokenResponse {
 async fn refresh_access_token(
     pool: web::Data<PgPool>,
     web::Json(RefreshAccessTokenRequest { token }): web::Json<RefreshAccessTokenRequest>,
-) -> Result<HttpResponse> {
+) -> AppResult<HttpResponse> {
     let conn = pool.get()?;
     let access_token = token.sign_access_token_simple(&conn)?;
 

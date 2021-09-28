@@ -2,14 +2,15 @@ use std::convert::{TryFrom, TryInto};
 
 use crate::crypto::{hash_password, verify_password};
 use crate::db::postgres::PgConn;
-use crate::email::{send_verification_email, SmtpConnection};
-use crate::result::{Error, Result};
+use crate::email::{Emails};
+use crate::errors::{AppResult, Error};
 use crate::schema::users;
+use crate::token::VerificationToken;
 use crate::types::{EmailAddress, Password, PersonalName};
 
 use chrono::{DateTime, Utc};
-use diesel::prelude::*;
-use lettre_email::Mailbox;
+use diesel::{insert_into, prelude::*};
+use lettre::message::Mailbox;
 use pbkdf2::password_hash::PasswordHash;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -60,7 +61,7 @@ impl UserChangeset {
 impl TryFrom<UpdateUser> for UserChangeset {
     type Error = Error;
 
-    fn try_from(u: UpdateUser) -> core::result::Result<Self, Self::Error> {
+    fn try_from(u: UpdateUser) -> Result<Self, Self::Error> {
         let UpdateUser {
             password: _,
             new_password,
@@ -98,7 +99,7 @@ fn map_diesel_error(err: diesel::result::Error) -> Error {
 }
 
 impl User {
-    pub fn find_by_email(conn: &PgConn, email: &EmailAddress) -> Result<Self> {
+    pub fn find_by_email(conn: &PgConn, email: &EmailAddress) -> AppResult<Self> {
         use crate::schema::users::{columns, dsl::users};
         users
             .filter(columns::email.eq(email))
@@ -106,30 +107,12 @@ impl User {
             .map_err(map_diesel_error)
     }
 
-    pub fn create(conn: &PgConn, query: &CreateUser) -> Result<Self> {
-        let hash = hash_password(query.password.as_bytes())?;
-
-        let new_user = NewUser {
-            id: Uuid::new_v4(),
-            email: query.email.as_str(),
-            hash: &hash,
-            full_name: query.full_name.as_str(),
-        };
-
-        let inserted_row = diesel::insert_into(users::table)
-            .values(&new_user)
-            .get_result(conn)
-            .map_err(map_diesel_error)?;
-
-        Ok(inserted_row)
-    }
-
     pub fn hash(&self) -> PasswordHash {
         PasswordHash::new(&self.hash).expect("failed to parse hash")
     }
 
     /// Update the user while verifying that the password is correct.
-    pub fn update(&self, smtp: &SmtpConnection, pg: &PgConn, update: UpdateUser) -> Result<Self> {
+    pub fn update(&self, _emails: &Emails, pg: &PgConn, update: UpdateUser) -> AppResult<Self> {
         verify_password(update.password.as_bytes(), &self.hash())?;
 
         let cs: UserChangeset = update.try_into()?;
@@ -140,14 +123,14 @@ impl User {
             .map_err(map_diesel_error)?;
 
         if result.email != self.email {
-            send_verification_email(smtp, &result)?;
+            todo!();
         }
 
         Ok(result)
     }
 
     pub fn mailbox(&self) -> Mailbox {
-        Mailbox::new_with_name(self.full_name.to_string(), self.email.to_string())
+        Mailbox::new(Some(self.full_name.to_string()), self.email.clone().into())
     }
 }
 
@@ -155,9 +138,32 @@ impl User {
 #[table_name = "users"]
 pub struct NewUser<'a> {
     pub id: UserId,
-    pub email: &'a str,
-    pub hash: &'a str,
+    pub email: &'a EmailAddress,
+    pub hash: String,
     pub full_name: &'a str,
+}
+
+impl<'a> NewUser<'a> {
+    pub fn new(query: &'a CreateUser) -> AppResult<Self> {
+        let hash = hash_password(query.password.as_bytes())?;
+
+        Ok(Self {
+            id: Uuid::new_v4(),
+            email: &query.email,
+            hash,
+            full_name: query.full_name.as_str(),
+        })
+    }
+
+    pub fn create(&self, conn: &PgConn, emails: &Emails) -> QueryResult<User> {
+        conn.transaction(|| {
+            let user: User = insert_into(users::table).values(self).get_result(conn)?;
+
+            let _ = emails.send_user_confirmation(&user, VerificationToken::new("abc123"));
+
+            Ok(user)
+        })
+    }
 }
 
 /// Public-facing version of [User], excluding sensitive data
@@ -197,7 +203,7 @@ mod tests {
     use chrono::NaiveDateTime;
     use serde_json::json;
 
-    use crate::{db::postgres::pg_test_conn, result::Error};
+    use crate::{db::postgres::pg_test_conn, errors::Error};
 
     use super::*;
 

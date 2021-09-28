@@ -4,10 +4,10 @@ use serde::Deserialize;
 use crate::client_info::ClientInfo;
 use crate::db::postgres::PgPool;
 use crate::db::redis::RedisPool;
+use crate::errors::AppResult;
 use crate::login_with_password;
 use crate::models::Session;
 use crate::rate_limit::{RateLimit, SlidingWindow};
-use crate::result::Result;
 use crate::types::{EmailAddress, Password};
 
 #[derive(Debug, Deserialize)]
@@ -22,7 +22,7 @@ async fn handle_login(
     redis: web::Data<RedisPool>,
     credentials: web::Json<LoginRequest>,
     client_info: ClientInfo,
-) -> Result<HttpResponse> {
+) -> AppResult<HttpResponse> {
     const RATE_LIMIT: SlidingWindow = SlidingWindow::new("login", 60, 10);
 
     let client = format!("{}/{}", client_info.addr, &credentials.email);

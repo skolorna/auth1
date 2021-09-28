@@ -1,119 +1,152 @@
 use std::{
     env,
+    fmt::Debug,
     sync::{Arc, Mutex, MutexGuard},
 };
 
 use lettre::{
-    smtp::authentication::{Credentials, Mechanism},
-    Envelope, SendableEmail, SmtpClient, Transport,
+    message::Mailbox,
+    transport::smtp::authentication::{Credentials, Mechanism},
+    Message, SmtpTransport, Transport,
 };
-use lettre_email::{EmailBuilder, Mailbox};
 
-use crate::{models::User, rate_limit::SlidingWindow, result::Result, token::VerificationToken};
-
-const FROM: (&str, &str) = ("system@skolorna.com", "Skolorna");
-const REPLY_TO: &str = "hej@skolorna.com";
-
-type TestInbox = Vec<(Envelope, String)>;
+use crate::{errors::AppResult, models::User, rate_limit::SlidingWindow, token::VerificationToken};
 
 #[derive(Debug, Clone)]
-pub enum SmtpConnection {
-    BasicAuth {
-        host: String,
-        username: String,
-        password: String,
-    },
-    TestInbox(Arc<Mutex<TestInbox>>),
+pub struct Emails {
+    backend: EmailBackend,
 }
 
-impl SmtpConnection {
+impl Emails {
     pub fn from_env() -> Self {
-        Self::BasicAuth {
+        let backend = EmailBackend::Smtp {
             host: env::var("SMTP_HOST").expect("SMTP_HOST is not set"),
             username: env::var("SMTP_USERNAME").expect("SMTP_USERNAME is not set"),
             password: env::var("SMTP_PASSWORD").expect("SMTP_PASSWORD is not set"),
+            from: Mailbox::new(
+                Some("Skolorna".into()),
+                "system@skolorna.com".parse().unwrap(),
+            ),
+            reply_to: Some(Mailbox::new(None, "hej@skolorna.com".parse().unwrap())),
+        };
+
+        Self { backend }
+    }
+
+    pub fn new_in_memory() -> Self {
+        Self {
+            backend: EmailBackend::Memory {
+                mails: Arc::new(Mutex::new(Vec::new())),
+            },
         }
     }
 
-    pub fn send(&self, email: SendableEmail) -> Result<()> {
-        match self {
-            SmtpConnection::BasicAuth {
+    pub fn mails_in_memory(&self) -> Option<MutexGuard<Vec<StoredEmail>>> {
+        if let EmailBackend::Memory { mails } = &self.backend {
+            Some(mails.lock().unwrap())
+        } else {
+            None
+        }
+    }
+
+    pub fn send_user_confirmation(&self, user: &User, token: VerificationToken) -> AppResult<()> {
+        self.send(
+            &user.mailbox(),
+            "Bekräfta din e-postadress",
+            format!(
+                "\
+    V\u{e4}lkommen till Skolorna!
+                
+    Tryck p\u{e5} l\u{e4}nken nedan f\u{f6}r att bekr\u{e4}fta din e-postadress:
+                            
+    {}",
+                token
+            ),
+        )
+    }
+
+    fn send(&self, recipient: &Mailbox, subject: &str, body: impl ToString) -> AppResult<()> {
+        let mut email = Message::builder()
+            .to(recipient.clone())
+            .from(self.sender_address())
+            .subject(subject);
+
+        if let Some(reply_to) = self.reply_to() {
+            email = email.reply_to(reply_to.clone());
+        }
+
+        let email = email.body(body.to_string())?;
+
+        match &self.backend {
+            EmailBackend::Smtp {
                 host,
                 username,
                 password,
+                ..
             } => {
-                let client = SmtpClient::new_simple(host)
-                    .expect("couldn't create smtp client")
-                    .authentication_mechanism(Mechanism::Plain)
-                    .credentials(Credentials::new(username.clone(), password.clone()));
-
-                client.transport().send(email)?;
-
-                Ok(())
+                SmtpTransport::relay(host)?
+                    .credentials(Credentials::new(username.clone(), password.clone()))
+                    .authentication(vec![Mechanism::Plain])
+                    .build()
+                    .send(&email)?;
             }
-            SmtpConnection::TestInbox(data) => {
-                let mut inbox = data.lock().unwrap();
-                inbox.push((
-                    email.envelope().to_owned(),
-                    email.message_to_string().unwrap(),
-                ));
-                Ok(())
-            }
+            EmailBackend::Memory { mails } => mails.lock().unwrap().push(StoredEmail {
+                to: recipient.to_string(),
+                subject: subject.into(),
+                body: body.to_string(),
+            }),
+        }
+
+        Ok(())
+    }
+
+    fn sender_address(&self) -> Mailbox {
+        match &self.backend {
+            EmailBackend::Smtp { ref from, .. } => from.clone(),
+            EmailBackend::Memory { .. } => Mailbox::new(None, "test@localhost".parse().unwrap()),
         }
     }
 
-    pub fn new_test_inbox() -> Self {
-        Self::TestInbox(Arc::new(Mutex::new(vec![])))
-    }
-
-    pub fn get_test_inbox(&self) -> MutexGuard<TestInbox> {
-        if let Self::TestInbox(data) = self {
-            data.lock().unwrap()
-        } else {
-            panic!();
+    fn reply_to(&self) -> Option<&Mailbox> {
+        match &self.backend {
+            EmailBackend::Smtp { reply_to, .. } => reply_to.as_ref(),
+            EmailBackend::Memory { .. } => None,
         }
     }
 }
 
-pub fn send_email(
-    smtp: &SmtpConnection,
-    mailbox: impl Into<Mailbox>,
-    subject: String,
-    text: String,
-) -> Result<()> {
-    let email = EmailBuilder::new()
-        .from(FROM)
-        .reply_to(REPLY_TO)
-        .to(mailbox)
-        .subject(subject)
-        .text(text)
-        .build()?;
-
-    smtp.send(email.into())?;
-
-    Ok(())
+#[derive(Debug, Clone)]
+pub struct StoredEmail {
+    pub to: String,
+    pub subject: String,
+    pub body: String,
 }
 
-pub fn send_verification_email(smtp: &SmtpConnection, user: &User) -> Result<()> {
-    let token = VerificationToken::generate(user)?;
+#[derive(Clone)]
+pub enum EmailBackend {
+    Smtp {
+        host: String,
+        username: String,
+        password: String,
+        from: Mailbox,
+        reply_to: Option<Mailbox>,
+    },
+    Memory {
+        mails: Arc<Mutex<Vec<StoredEmail>>>,
+    },
+}
 
-    // FIXME: Don't use localhost...
-    send_email(
-        smtp,
-        user.mailbox(),
-        "Bekr\u{e4}fta din e-postadress".into(),
-        format!(
-            "\
-V\u{e4}lkommen till Skolorna!
-            
-Tryck p\u{e5} l\u{e4}nken nedan f\u{f6}r att bekr\u{e4}fta din e-postadress:
-                        
-{}",
-            token
-        ),
-    )?;
-
-    Ok(())
+impl Debug for EmailBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Smtp { host, username, .. } => f
+                .debug_struct("Smtp")
+                .field("host", host)
+                .field("username", username)
+                .finish(),
+            Self::Memory { mails: _ } => f.write_str("Memory"),
+        }
+    }
 }
 
 pub const EMAIL_RATE_LIMIT: SlidingWindow = SlidingWindow::new("send_email", 3600, 10);

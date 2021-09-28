@@ -7,16 +7,16 @@ use diesel::prelude::*;
 
 use crate::{
     db::postgres::PgPool,
+    errors::{AppResult, Error},
     identity::Identity,
     models::{
         session::{SessionId, SessionInfo},
         Session,
     },
-    result::{Error, Result},
 };
 
 #[get("")]
-async fn list_sessions(pool: web::Data<PgPool>, ident: Identity) -> Result<HttpResponse> {
+async fn list_sessions(pool: web::Data<PgPool>, ident: Identity) -> AppResult<HttpResponse> {
     use crate::schema::sessions::columns;
     let conn = pool.get()?;
     let res = web::block(move || {
@@ -33,7 +33,7 @@ async fn list_sessions(pool: web::Data<PgPool>, ident: Identity) -> Result<HttpR
 }
 
 #[delete("")]
-async fn clear_sessions(pool: web::Data<PgPool>, ident: Identity) -> Result<HttpResponse> {
+async fn clear_sessions(pool: web::Data<PgPool>, ident: Identity) -> AppResult<HttpResponse> {
     let conn = pool.get()?;
     let num_deleted =
         web::block(move || diesel::delete(Session::belonging_to(&ident.user)).execute(&conn))
@@ -47,7 +47,7 @@ async fn delete_session(
     pool: web::Data<PgPool>,
     ident: Identity,
     web::Path(id): web::Path<SessionId>,
-) -> Result<HttpResponse> {
+) -> AppResult<HttpResponse> {
     let conn = pool.get()?;
     let num_deleted = web::block(move || {
         diesel::delete(Session::belonging_to(&ident.user).filter(Session::with_id(id)))
