@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{ops::Range, str::FromStr};
 
 use serde::{de, Deserialize, Deserializer};
 use thiserror::Error;
@@ -9,6 +9,8 @@ use thiserror::Error;
 pub struct Password(String);
 
 impl Password {
+    const ACCEPTABLE_LEN: Range<usize> = 8..1024;
+
     pub fn as_bytes(&self) -> &[u8] {
         self.0.as_bytes()
     }
@@ -16,16 +18,22 @@ impl Password {
 
 #[derive(Debug, Error)]
 pub enum ValidatePasswordError {
-    #[error("password too short")]
-    TooShort,
+    #[error("invalid password length (must be within {acceptable:?}; got {received})")]
+    InvalidLength {
+        acceptable: Range<usize>,
+        received: usize,
+    },
 }
 
 impl FromStr for Password {
     type Err = ValidatePasswordError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.chars().count() < 8 {
-            return Err(ValidatePasswordError::TooShort);
+        if !Self::ACCEPTABLE_LEN.contains(&s.len()) {
+            return Err(ValidatePasswordError::InvalidLength {
+                acceptable: Self::ACCEPTABLE_LEN,
+                received: s.len(),
+            });
         }
 
         Ok(Self(s.to_owned()))
@@ -56,7 +64,9 @@ mod tests {
             assert!(Password::from_str(pass).is_ok());
         }
 
-        let bad_passwords = vec![""];
+        let too_long = "ö".repeat(512); // 512 characters but 1024 bytes
+
+        let bad_passwords = vec!["", "hunter4", &too_long];
 
         for pass in bad_passwords {
             assert!(

@@ -13,6 +13,8 @@ use thiserror::Error;
 pub struct PersonalName(String);
 
 impl PersonalName {
+    const MAX_LEN: usize = 512;
+
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -23,8 +25,8 @@ pub enum ParsePersonalNameError {
     #[error("empty personal name")]
     Empty,
 
-    #[error("invalid personal name")]
-    InvalidName,
+    #[error("personal name too long")]
+    TooLong,
 
     #[error("invalid whitespace")]
     InvalidWhitespace,
@@ -49,6 +51,10 @@ impl FromStr for PersonalName {
 
         if s.trim() != s {
             return Err(ParsePersonalNameError::Untrimmed);
+        }
+
+        if s.len() > Self::MAX_LEN {
+            return Err(ParsePersonalNameError::TooLong);
         }
 
         Ok(Self(s.to_owned()))
@@ -125,12 +131,15 @@ mod tests {
             assert!(PersonalName::from_str(name).is_ok());
         }
 
+        let long_name = "a".repeat(1000);
+
         let invalid_names = vec![
             "",
             "\t",
             "\t\t  Bobby Tables",
             "Bobby\nTables",
             "           Bobby Tables    ",
+            &long_name,
         ];
 
         for name in invalid_names {
