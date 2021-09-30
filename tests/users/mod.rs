@@ -56,9 +56,9 @@ async fn create_user_and_login() {
 
     let (res, status) = server
         .post_json(
-            "/refresh",
+            "/token",
             json!({
-                "token": refresh_token,
+                "refresh_token": refresh_token,
             }),
         )
         .await;

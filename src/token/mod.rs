@@ -14,6 +14,8 @@ use crate::{
     models::{session::SessionId, user::UserId, Session},
 };
 
+use self::refresh_token::RefreshToken;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccessToken(String);
 
@@ -118,4 +120,10 @@ impl Display for VerificationToken {
 pub struct VerificationTokenClaims {
     pub exp: i64,
     pub email: EmailAddress,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TokenResponse {
+    pub access_token: AccessToken,
+    pub refresh_token: Option<RefreshToken>,
 }

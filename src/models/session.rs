@@ -14,7 +14,7 @@ use crate::{
     db::postgres::PgConn,
     errors::{AppResult, Error},
     schema::sessions,
-    token::{refresh_token::RefreshToken, AccessToken},
+    token::{refresh_token::RefreshToken, TokenResponse},
 };
 
 /// FIXME: In the future, it's probably better to use some sort of clock-based uuid generation:
@@ -36,12 +36,6 @@ pub struct Session {
     pub exp: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize)]
-pub struct CreatedSession {
-    pub refresh_token: RefreshToken,
-    pub access_token: AccessToken,
-}
-
 type NotExpired = Gt<sessions::columns::exp, Bound<Timestamptz, DateTime<Utc>>>;
 type WithId = Eq<sessions::columns::id, Bound<sql_types::Uuid, Uuid>>;
 
@@ -58,9 +52,9 @@ impl Session {
 
     /// Create a new session for a specific user and insert the session into the
     /// database. A refresh token is generated and returned.
-    pub fn create(conn: &PgConn, sub: UserId) -> AppResult<CreatedSession> {
+    pub fn create(conn: &PgConn, sub: UserId) -> AppResult<TokenResponse> {
         let id = Uuid::new_v4();
-        let refresh_token = RefreshToken::generate_secret(id);
+        let refresh_token = RefreshToken::generate(id);
 
         let (public_pem, private_der) = {
             let rsa = Rsa::generate(Self::RSA_BITS).map_err(|_| Error::InternalError)?;
@@ -82,17 +76,10 @@ impl Session {
 
         let session: Self = diesel::insert_into(sessions::table)
             .values(new_session)
-            .get_result(conn)
-            .map_err(|e| match e {
-                diesel::result::Error::DatabaseError(
-                    diesel::result::DatabaseErrorKind::ForeignKeyViolation,
-                    _,
-                ) => Error::UserNotFound,
-                _ => e.into(),
-            })?;
+            .get_result(conn)?;
 
-        Ok(CreatedSession {
-            refresh_token,
+        Ok(TokenResponse {
+            refresh_token: Some(refresh_token),
             access_token: refresh_token.sign_access_token(
                 session.private_key,
                 session.sub,
@@ -111,19 +98,22 @@ impl Session {
     /// much shorter lifetimes.
     pub fn get_pubkey(conn: &PgConn, id: SessionId) -> AppResult<(Vec<u8>, UserId, DateTime<Utc>)> {
         use crate::schema::sessions::{columns, table};
-        let (pubkey, exp, sub): (Vec<u8>, DateTime<Utc>, UserId) = table
-            .select((columns::public_key, columns::exp, columns::sub))
-            .find(id)
-            .first(conn)
-            .map_err(|_| Error::KeyNotFound)?;
 
-        if exp > Utc::now() {
-            Ok((pubkey, sub, exp))
-        } else {
-            diesel::delete(table.find(id)).execute(conn)?;
+        conn.transaction(|| {
+            let (pubkey, exp, sub): (Vec<u8>, DateTime<Utc>, UserId) = table
+                .select((columns::public_key, columns::exp, columns::sub))
+                .find(id)
+                .first(conn)
+                .map_err(|_| Error::KeyNotFound)?;
 
-            Err(Error::KeyNotFound)
-        }
+            if exp > Utc::now() {
+                Ok((pubkey, sub, exp))
+            } else {
+                diesel::delete(table.find(id)).execute(conn)?;
+
+                Err(Error::KeyNotFound)
+            }
+        })
     }
 }
 
@@ -146,24 +136,4 @@ struct NewSession<'a> {
     private_key: &'a [u8],
     started: DateTime<Utc>,
     exp: DateTime<Utc>,
-}
-
-#[cfg(test)]
-mod tests {
-    use uuid::Uuid;
-
-    use crate::{db::postgres::pg_test_conn, errors::Error};
-
-    use super::Session;
-
-    #[test]
-    fn issue_access_token() {
-        let conn = pg_test_conn();
-
-        match Session::create(&conn, Uuid::nil()) {
-            Err(Error::UserNotFound) => {} // Of course there isn't a nil user
-            Err(other_error) => panic!("wrong error type ({})", other_error),
-            Ok(_) => panic!("this shouldn't work"),
-        }
-    }
 }

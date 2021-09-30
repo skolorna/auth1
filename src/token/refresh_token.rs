@@ -27,14 +27,14 @@ pub struct RefreshToken {
 }
 
 impl RefreshToken {
-    pub const SECRET_SIZE: usize = 44;
+    const SECRET_SIZE: usize = 44;
     const MAX_B64_SIZE: usize = 4 * (Self::SECRET_SIZE + 2) / 3;
 
     pub fn new(session: SessionId, secret: Secret) -> Self {
         Self { session, secret }
     }
 
-    pub fn generate_secret(session: SessionId) -> Self {
+    pub fn generate(session: SessionId) -> Self {
         let mut data = [0_u8; Self::SECRET_SIZE];
         OsRng.fill_bytes(&mut data);
         Self::new(session, data)
