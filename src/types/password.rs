@@ -23,6 +23,10 @@ pub enum ValidatePasswordError {
         acceptable: Range<usize>,
         received: usize,
     },
+
+    /// Typos such as a trailing space are not fun.
+    #[error("password contains whitespace")]
+    ContainsWhitespace,
 }
 
 impl FromStr for Password {
@@ -34,6 +38,10 @@ impl FromStr for Password {
                 acceptable: Self::ACCEPTABLE_LEN,
                 received: s.len(),
             });
+        }
+
+        if s.contains(|c: char| c.is_whitespace()) {
+            return Err(ValidatePasswordError::ContainsWhitespace);
         }
 
         Ok(Self(s.to_owned()))
@@ -66,7 +74,7 @@ mod tests {
 
         let too_long = "ö".repeat(512); // 512 characters but 1024 bytes
 
-        let bad_passwords = vec!["", "hunter4", &too_long];
+        let bad_passwords = vec!["", "hunter4", &too_long, "with bad whitespaces"];
 
         for pass in bad_passwords {
             assert!(

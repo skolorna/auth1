@@ -19,7 +19,7 @@ async fn get_nonexistent_user() {
             "perf3ctlÿf1nepassw0rd",
         )
         .await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
 #[actix_rt::test]
@@ -139,7 +139,7 @@ async fn test_verify_email(server: &Server, email: &str) {
         subject: _,
         body,
     } = server.pop_mail().unwrap();
-    assert_eq!(to, email);
+    assert!(to.contains(email));
     let jwt_re = Regex::new(r"[0-9a-zA-Z_-]+\.[0-9a-zA-Z_-]+\.[0-9a-zA-Z_-]+").unwrap();
     let verification_token = jwt_re.find(&body).unwrap().as_str();
 

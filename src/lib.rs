@@ -29,6 +29,7 @@ use db::{
     redis::{redis_pool_from_env, RedisPool},
 };
 use email::Emails;
+use errors::Error;
 use models::User;
 use types::{EmailAddress, Password};
 
@@ -38,7 +39,10 @@ pub fn login_with_password(
     email: &EmailAddress,
     password: &Password,
 ) -> AppResult<User> {
-    let user = User::find_by_email(conn, email)?;
+    let user = match User::find_by_email(conn, email)? {
+        Some(user) => user,
+        None => return Err(Error::InvalidCredentials),
+    };
 
     verify_password(password.as_bytes(), &user.hash())?;
 
