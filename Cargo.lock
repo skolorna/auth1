@@ -1232,6 +1232,7 @@ dependencies = [
  "quoted_printable",
  "r2d2",
  "regex",
+ "uuid",
 ]
 
 [[package]]

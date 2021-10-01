@@ -1,36 +1,55 @@
 use std::{
     env,
     fmt::Debug,
+    path::PathBuf,
     sync::{Arc, Mutex, MutexGuard},
 };
 
 use lettre::{
     message::Mailbox,
     transport::smtp::authentication::{Credentials, Mechanism},
-    Message, SmtpTransport, Transport,
+    FileTransport, Message, SmtpTransport, Transport,
 };
 
-use crate::{errors::AppResult, models::User, rate_limit::SlidingWindow, token::VerificationToken};
+use crate::{
+    errors::{AppResult, Error},
+    models::User,
+    rate_limit::SlidingWindow,
+    token::VerificationToken,
+};
 
 #[derive(Debug, Clone)]
 pub struct Emails {
     backend: EmailBackend,
+    from: Mailbox,
+    reply_to: Option<Mailbox>,
 }
 
 impl Emails {
     pub fn from_env() -> Self {
-        let backend = EmailBackend::Smtp {
-            host: env::var("SMTP_HOST").expect("SMTP_HOST is not set"),
-            username: env::var("SMTP_USERNAME").expect("SMTP_USERNAME is not set"),
-            password: env::var("SMTP_PASSWORD").expect("SMTP_PASSWORD is not set"),
+        let backend = match (
+            env::var("SMTP_HOST"),
+            env::var("SMTP_PASSWORD"),
+            env::var("SMTP_PASSWORD"),
+        ) {
+            (Ok(host), Ok(username), Ok(password)) => EmailBackend::Smtp {
+                host,
+                username,
+                password,
+            },
+            _ => EmailBackend::FileSystem {
+                path: "/tmp".parse().unwrap(),
+            },
+        };
+
+        Self {
+            backend,
             from: Mailbox::new(
                 Some("Skolorna".into()),
                 "system@skolorna.com".parse().unwrap(),
             ),
             reply_to: Some(Mailbox::new(None, "hej@skolorna.com".parse().unwrap())),
-        };
-
-        Self { backend }
+        }
     }
 
     pub fn new_in_memory() -> Self {
@@ -38,6 +57,8 @@ impl Emails {
             backend: EmailBackend::Memory {
                 mails: Arc::new(Mutex::new(Vec::new())),
             },
+            from: Mailbox::new(None, "test@localhost".parse().unwrap()),
+            reply_to: None,
         }
     }
 
@@ -68,10 +89,10 @@ impl Emails {
     fn send(&self, recipient: &Mailbox, subject: &str, body: impl ToString) -> AppResult<()> {
         let mut email = Message::builder()
             .to(recipient.clone())
-            .from(self.sender_address())
+            .from(self.from.clone())
             .subject(subject);
 
-        if let Some(reply_to) = self.reply_to() {
+        if let Some(reply_to) = self.reply_to.as_ref() {
             email = email.reply_to(reply_to.clone());
         }
 
@@ -90,6 +111,11 @@ impl Emails {
                     .build()
                     .send(&email)?;
             }
+            EmailBackend::FileSystem { path } => {
+                FileTransport::new(path)
+                    .send(&email)
+                    .map_err(|_| Error::InternalError)?;
+            }
             EmailBackend::Memory { mails } => mails.lock().unwrap().push(StoredEmail {
                 to: recipient.to_string(),
                 subject: subject.into(),
@@ -98,20 +124,6 @@ impl Emails {
         }
 
         Ok(())
-    }
-
-    fn sender_address(&self) -> Mailbox {
-        match &self.backend {
-            EmailBackend::Smtp { ref from, .. } => from.clone(),
-            EmailBackend::Memory { .. } => Mailbox::new(None, "test@localhost".parse().unwrap()),
-        }
-    }
-
-    fn reply_to(&self) -> Option<&Mailbox> {
-        match &self.backend {
-            EmailBackend::Smtp { reply_to, .. } => reply_to.as_ref(),
-            EmailBackend::Memory { .. } => None,
-        }
     }
 }
 
@@ -128,8 +140,9 @@ pub enum EmailBackend {
         host: String,
         username: String,
         password: String,
-        from: Mailbox,
-        reply_to: Option<Mailbox>,
+    },
+    FileSystem {
+        path: PathBuf,
     },
     Memory {
         mails: Arc<Mutex<Vec<StoredEmail>>>,
@@ -144,6 +157,7 @@ impl Debug for EmailBackend {
                 .field("host", host)
                 .field("username", username)
                 .finish(),
+            Self::FileSystem { path } => f.debug_struct("FileSystem").field("path", path).finish(),
             Self::Memory { mails: _ } => f.write_str("Memory"),
         }
     }
