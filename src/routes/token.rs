@@ -1,4 +1,4 @@
-use actix_web::{post, web, HttpResponse};
+use actix_web::{web, HttpResponse};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -18,7 +18,6 @@ struct RefreshAccessTokenResponse {
     access_token: AccessToken,
 }
 
-#[post("")]
 async fn manage_token(
     pool: web::Data<PgPool>,
     web::Json(req): web::Json<ManageTokenRequest>,
@@ -40,5 +39,5 @@ async fn manage_token(
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(manage_token);
+    cfg.service(web::resource("").route(web::post().to(manage_token)));
 }

@@ -1,4 +1,4 @@
-use actix_web::{post, web, HttpResponse};
+use actix_web::{web, HttpResponse};
 
 use crate::client_info::ClientInfo;
 use crate::db::postgres::PgPool;
@@ -8,7 +8,6 @@ use crate::errors::AppResult;
 use crate::models::user::{CreateUser, NewUser};
 use crate::rate_limit::{RateLimit, SlidingWindow};
 
-#[post("")]
 async fn handle_registration(
     pg: web::Data<PgPool>,
     redis: web::Data<RedisPool>,
@@ -29,5 +28,5 @@ async fn handle_registration(
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(handle_registration);
+    cfg.service(web::resource("").route(web::post().to(handle_registration)));
 }

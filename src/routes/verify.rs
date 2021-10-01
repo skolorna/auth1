@@ -1,4 +1,4 @@
-use actix_web::{post, web, HttpResponse};
+use actix_web::{web, HttpResponse};
 use serde::Deserialize;
 
 use crate::client_info::ClientInfo;
@@ -16,7 +16,6 @@ pub struct VerificationQuery {
     token: VerificationToken,
 }
 
-#[post("")]
 async fn verify_email(
     pool: web::Data<PgPool>,
     info: web::Json<VerificationQuery>,
@@ -27,7 +26,6 @@ async fn verify_email(
     Ok(HttpResponse::Ok().body("success"))
 }
 
-#[post("/resend")]
 async fn resend_verification(
     redis: web::Data<RedisPool>,
     emails: web::Data<Emails>,
@@ -49,5 +47,6 @@ async fn resend_verification(
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(verify_email).service(resend_verification);
+    cfg.service(web::resource("").route(web::post().to(verify_email)))
+        .service(web::resource("/resend").route(web::post().to(resend_verification)));
 }

@@ -1,4 +1,4 @@
-use actix_web::{post, web, HttpResponse};
+use actix_web::{web, HttpResponse};
 use serde::Deserialize;
 
 use crate::client_info::ClientInfo;
@@ -16,7 +16,6 @@ struct LoginRequest {
     pub password: Password,
 }
 
-#[post("")]
 async fn handle_login(
     pg: web::Data<PgPool>,
     redis: web::Data<RedisPool>,
@@ -39,5 +38,5 @@ async fn handle_login(
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(handle_login);
+    cfg.service(web::resource("").route(web::post().to(handle_login)));
 }

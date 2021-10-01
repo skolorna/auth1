@@ -1,5 +1,4 @@
 use actix_web::{
-    delete, get,
     http::header::{CacheControl, CacheDirective},
     web, HttpResponse,
 };
@@ -15,7 +14,6 @@ use crate::{
     },
 };
 
-#[get("")]
 async fn list_sessions(pool: web::Data<PgPool>, ident: Identity) -> AppResult<HttpResponse> {
     use crate::schema::sessions::columns;
     let conn = pool.get()?;
@@ -32,7 +30,6 @@ async fn list_sessions(pool: web::Data<PgPool>, ident: Identity) -> AppResult<Ht
         .json(res))
 }
 
-#[delete("")]
 async fn clear_sessions(pool: web::Data<PgPool>, ident: Identity) -> AppResult<HttpResponse> {
     let conn = pool.get()?;
     let num_deleted =
@@ -42,7 +39,6 @@ async fn clear_sessions(pool: web::Data<PgPool>, ident: Identity) -> AppResult<H
     Ok(HttpResponse::Ok().body(format!("deleted {} keys", num_deleted)))
 }
 
-#[delete("/{id}")]
 async fn delete_session(
     pool: web::Data<PgPool>,
     ident: Identity,
@@ -63,7 +59,10 @@ async fn delete_session(
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(list_sessions)
-        .service(clear_sessions)
-        .service(delete_session);
+    cfg.service(
+        web::resource("")
+            .route(web::get().to(list_sessions))
+            .route(web::delete().to(clear_sessions)),
+    )
+    .service(web::resource("/{id}").route(web::delete().to(delete_session)));
 }

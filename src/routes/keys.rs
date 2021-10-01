@@ -1,5 +1,5 @@
 use actix_web::http::header::{self, CacheControl, CacheDirective};
-use actix_web::{get, web, HttpResponse};
+use actix_web::{web, HttpResponse};
 
 use crate::db::postgres::PgPool;
 use crate::errors::AppResult;
@@ -7,7 +7,6 @@ use crate::models::session::SessionId;
 use crate::models::Session;
 use crate::util::http_date_fmt;
 
-#[get("/{id}")]
 async fn get_pubkey(
     pool: web::Data<PgPool>,
     web::Path(id): web::Path<SessionId>,
@@ -31,5 +30,5 @@ async fn get_pubkey(
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(get_pubkey);
+    cfg.service(web::resource("/{id}").route(web::get().to(get_pubkey)));
 }

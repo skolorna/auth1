@@ -1,9 +1,8 @@
 pub mod sessions;
 
 use actix_web::{
-    get,
     http::header::{CacheControl, CacheDirective},
-    patch, web, HttpResponse,
+    web, HttpResponse,
 };
 
 use crate::{
@@ -11,14 +10,12 @@ use crate::{
     models::user::UpdateUser,
 };
 
-#[get("/@me")]
 async fn get_me(ident: Identity) -> AppResult<HttpResponse> {
     Ok(HttpResponse::Ok()
         .set(CacheControl(vec![CacheDirective::Private]))
         .json(ident.user))
 }
 
-#[patch("/@me")]
 async fn patch_me(
     ident: Identity,
     web::Json(info): web::Json<UpdateUser>,
@@ -31,7 +28,10 @@ async fn patch_me(
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(get_me)
-        .service(patch_me)
-        .service(web::scope("/@me/sessions").configure(sessions::configure));
+    cfg.service(
+        web::resource("/@me")
+            .route(web::get().to(get_me))
+            .route(web::patch().to(patch_me)),
+    )
+    .service(web::scope("/@me/sessions").configure(sessions::configure));
 }
