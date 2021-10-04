@@ -19,7 +19,7 @@ async fn change_password() {
             "new_password": "süperstr0ngpas5word"
         }));
     let (_, status) = server.send_json(req).await;
-    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 
     let req = user
         .req()
@@ -33,7 +33,7 @@ async fn change_password() {
     assert_eq!(status, StatusCode::OK);
 
     let (_, status) = server.login_user(email, "weakpassword").await;
-    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 
     let (_, status) = server.login_user(email, "süperstr0ngpas5word").await;
     assert_eq!(status, StatusCode::OK);

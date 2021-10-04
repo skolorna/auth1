@@ -12,7 +12,7 @@ use serde::{de, Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    errors::{AppResult, Error},
+    errors::{AppError, AppResult},
     models::{session::SessionId, user::UserId},
 };
 
@@ -53,7 +53,7 @@ impl RefreshToken {
         &self.secret[32..]
     }
 
-    pub fn encrypt(&self, plaintext: &[u8]) -> AppResult<Vec<u8>> {
+    pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>, aes_gcm::Error> {
         use aes_gcm::aead::Aead;
         use aes_gcm::Nonce;
 
@@ -64,7 +64,7 @@ impl RefreshToken {
         Ok(ciphertext)
     }
 
-    pub fn decrypt(&self, ciphertext: &[u8]) -> AppResult<Vec<u8>> {
+    pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>, aes_gcm::Error> {
         use aes_gcm::aead::Aead;
         use aes_gcm::Nonce;
 
@@ -97,10 +97,12 @@ impl RefreshToken {
         let exp = (now + Duration::hours(1)).min(max_exp);
 
         if exp < now {
-            return Err(Error::InvalidCredentials);
+            return Err(AppError::InvalidRefreshToken);
         }
 
-        let der = self.decrypt(&private_key)?;
+        let der = self
+            .decrypt(&private_key)
+            .map_err(|_| AppError::InvalidRefreshToken)?;
 
         let encoding_key = EncodingKey::from_rsa_der(&der);
         let header = Header {

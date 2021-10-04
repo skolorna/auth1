@@ -5,14 +5,14 @@ use diesel::{
     prelude::*,
     sql_types::{self, Timestamptz},
 };
-use openssl::rsa::Rsa;
+use openssl::{error::ErrorStack, rsa::Rsa};
 use serde::Serialize;
 use uuid::Uuid;
 
 use super::user::{User, UserId};
 use crate::{
     db::postgres::PgConn,
-    errors::{AppResult, Error},
+    errors::{AppError, AppResult},
     schema::sessions,
     token::{refresh_token::RefreshToken, TokenResponse},
 };
@@ -39,6 +39,10 @@ pub struct Session {
 type NotExpired = Gt<sessions::columns::exp, Bound<Timestamptz, DateTime<Utc>>>;
 type WithId = Eq<sessions::columns::id, Bound<sql_types::Uuid, Uuid>>;
 
+fn map_rsa_err(err: ErrorStack) -> AppError {
+    AppError::InternalError { cause: err.into() }
+}
+
 impl Session {
     pub const RSA_BITS: u32 = 2048;
 
@@ -57,10 +61,10 @@ impl Session {
         let refresh_token = RefreshToken::generate(id);
 
         let (public_pem, private_der) = {
-            let rsa = Rsa::generate(Self::RSA_BITS).map_err(|_| Error::InternalError)?;
+            let rsa = Rsa::generate(Self::RSA_BITS).map_err(map_rsa_err)?;
             (
-                rsa.public_key_to_pem().map_err(|_| Error::InternalError)?,
-                rsa.private_key_to_der().map_err(|_| Error::InternalError)?,
+                rsa.public_key_to_pem().map_err(map_rsa_err)?,
+                rsa.private_key_to_der().map_err(map_rsa_err)?,
             )
         };
 
@@ -71,7 +75,11 @@ impl Session {
             started: now,
             exp: now + Duration::days(90),
             public_key: &public_pem,
-            private_key: &refresh_token.encrypt(&private_der)?,
+            private_key: &refresh_token.encrypt(&private_der).map_err(|e| {
+                AppError::InternalError {
+                    cause: e.to_string().into(),
+                }
+            })?,
         };
 
         let session: Self = diesel::insert_into(sessions::table)
@@ -96,25 +104,36 @@ impl Session {
     /// the key has expired or not as this public key is exclusively
     /// used for *validation* of access tokens that in turn have
     /// much shorter lifetimes.
-    pub fn get_pubkey(conn: &PgConn, id: SessionId) -> AppResult<(Vec<u8>, UserId, DateTime<Utc>)> {
+    pub fn get_pubkey(conn: &PgConn, id: SessionId) -> QueryResult<Option<PubKeyRes>> {
         use crate::schema::sessions::{columns, table};
 
         conn.transaction(|| {
-            let (pubkey, exp, sub): (Vec<u8>, DateTime<Utc>, UserId) = table
+            let data = table
                 .select((columns::public_key, columns::exp, columns::sub))
                 .find(id)
-                .first(conn)
-                .map_err(|_| Error::KeyNotFound)?;
+                .first::<PubKeyRes>(conn)
+                .optional()?;
 
-            if exp > Utc::now() {
-                Ok((pubkey, sub, exp))
-            } else {
-                diesel::delete(table.find(id)).execute(conn)?;
-
-                Err(Error::KeyNotFound)
+            if let Some(data) = data {
+                if data.exp > Utc::now() {
+                    return Ok(Some(data));
+                } else {
+                    diesel::delete(table.find(id)).execute(conn)?;
+                }
             }
+
+            Ok(None)
         })
     }
+}
+
+#[derive(Debug, Queryable, Associations)]
+#[belongs_to(User, foreign_key = "sub")]
+#[table_name = "sessions"]
+pub struct PubKeyRes {
+    pub pubkey: Vec<u8>,
+    pub exp: DateTime<Utc>,
+    pub sub: UserId,
 }
 
 #[derive(Debug, Queryable, Identifiable, Associations, Serialize)]

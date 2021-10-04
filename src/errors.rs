@@ -1,146 +1,190 @@
-use std::convert::TryInto;
+use std::fmt::Display;
 
 use actix_web::{
-    dev::HttpResponseBuilder,
-    http::{header, StatusCode},
-    HttpResponse, ResponseError,
+    dev::HttpResponseBuilder, error::JsonPayloadError, http::StatusCode, HttpResponse,
+    ResponseError,
 };
-use chrono::Duration;
+use chrono::{DateTime, Utc};
 use r2d2_redis::redis::RedisError;
-use thiserror::Error;
+use serde::Serialize;
 
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("email already verified")]
-    AlreadyVerified,
-
-    #[error("database error: {0}")]
-    DieselError(#[from] diesel::result::Error),
-
-    #[error("redis error")]
-    RedisError(#[from] RedisError),
-
-    #[error("lettre failed")]
-    LettreError(#[from] lettre::error::Error),
-
-    #[error("email already in use")]
+#[derive(Debug)]
+pub enum AppError {
+    InternalError {
+        cause: Box<dyn std::error::Error + Send + Sync>,
+    },
     EmailInUse,
-
-    #[error("internal server error")]
-    InternalError,
-
-    #[error("invalid credentials")]
-    InvalidCredentials,
-
-    #[error("invalid email")]
-    InvalidEmail,
-
-    #[error("key not found")]
-    KeyNotFound,
-
-    #[error("the token is missing or cannot be parsed")]
-    MissingToken,
-
-    #[error("smtp transport error")]
-    SmtpError(#[from] lettre::transport::smtp::Error),
-
-    #[error("rate limit exceeded")]
-    RateLimitExceeded { retry_after: Option<Duration> },
-
-    #[error("user not found")]
-    UserNotFound,
-
-    #[error("no user changes specified")]
-    NoUserChanges,
+    InvalidEmailPassword,
+    TooManyRequests {
+        retry_after: Option<DateTime<Utc>>,
+    },
+    SessionNotFound,
+    InvalidAccessToken,
+    BadRequest,
+    MissingAccessToken,
+    InvalidRefreshToken,
+    InvalidVerificationToken,
+    JsonError(serde_json::Error),
 }
 
-impl ResponseError for Error {
-    fn status_code(&self) -> actix_web::http::StatusCode {
-        use Error::{
-            AlreadyVerified, DieselError, EmailInUse, InternalError, InvalidCredentials,
-            InvalidEmail, KeyNotFound, LettreError, MissingToken, NoUserChanges, RateLimitExceeded,
-            RedisError, SmtpError, UserNotFound,
-        };
-
+impl ResponseError for AppError {
+    fn status_code(&self) -> StatusCode {
         match self {
-            AlreadyVerified => StatusCode::BAD_REQUEST,
-            InvalidCredentials => StatusCode::FORBIDDEN,
-            InternalError => StatusCode::INTERNAL_SERVER_ERROR,
-            DieselError(_err) => StatusCode::INTERNAL_SERVER_ERROR,
-            EmailInUse => StatusCode::CONFLICT,
-            UserNotFound => StatusCode::NOT_FOUND,
-            MissingToken => StatusCode::UNAUTHORIZED,
-            LettreError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            InvalidEmail => StatusCode::BAD_REQUEST,
-            KeyNotFound => StatusCode::NOT_FOUND,
-            RedisError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
-            SmtpError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            NoUserChanges => StatusCode::BAD_REQUEST,
+            AppError::InternalError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::EmailInUse => StatusCode::CONFLICT,
+            AppError::InvalidEmailPassword => StatusCode::BAD_REQUEST,
+            AppError::TooManyRequests { .. } => StatusCode::TOO_MANY_REQUESTS,
+            AppError::SessionNotFound => StatusCode::NOT_FOUND,
+            AppError::InvalidAccessToken => StatusCode::FORBIDDEN,
+            AppError::BadRequest => StatusCode::BAD_REQUEST,
+            AppError::MissingAccessToken => StatusCode::UNAUTHORIZED,
+            AppError::InvalidRefreshToken => StatusCode::BAD_REQUEST,
+            AppError::InvalidVerificationToken => StatusCode::BAD_REQUEST,
+            AppError::JsonError(_) => StatusCode::BAD_REQUEST,
         }
     }
 
     fn error_response(&self) -> HttpResponse {
         let mut res = HttpResponseBuilder::new(self.status_code());
 
-        res.header(header::CONTENT_TYPE, "text/plain; charset=utf-8");
+        res.json(ErrorJson::from(self))
+    }
+}
 
-        if let Error::RateLimitExceeded {
-            retry_after: Some(retry_after),
-        } = self
-        {
-            let secs: u64 = retry_after.num_seconds().try_into().unwrap_or(0);
-
-            res.header(header::RETRY_AFTER, secs.to_string());
+impl AppError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            AppError::InternalError { .. } => "internal_error",
+            AppError::EmailInUse => "email_in_use",
+            AppError::InvalidEmailPassword => "invalid_email_password",
+            AppError::TooManyRequests { .. } => "too_many_requests",
+            AppError::SessionNotFound => "session_not_found",
+            AppError::InvalidAccessToken => "invalid_access_token",
+            AppError::BadRequest => "bad_request",
+            AppError::MissingAccessToken => "missing_access_token",
+            AppError::InvalidRefreshToken => "invalid_refresh_token",
+            AppError::InvalidVerificationToken => "invalid_verification_token",
+            AppError::JsonError(_) => "invalid_body",
         }
-
-        res.body(self.to_string())
     }
 }
 
-impl From<pbkdf2::password_hash::Error> for Error {
-    fn from(_: pbkdf2::password_hash::Error) -> Self {
-        Self::InvalidCredentials
+impl Display for AppError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AppError::InternalError { .. } => write!(f, "An unknown error occurred."),
+            AppError::EmailInUse => write!(f, "The email address is in use by another account."),
+            AppError::InvalidEmailPassword => write!(f, "The email and/or password is incorrect."),
+            AppError::TooManyRequests { .. } => write!(f, "Too many requests."),
+            AppError::SessionNotFound => write!(f, "Session not found."),
+            AppError::InvalidAccessToken => write!(f, "Invalid access token."),
+            AppError::BadRequest => write!(f, "Bad request."),
+            AppError::MissingAccessToken => write!(f, "Access token is missing."),
+            AppError::InvalidRefreshToken => {
+                write!(f, "Invalid refresh token. Maybe it has expired?")
+            }
+            AppError::InvalidVerificationToken => write!(f, "The verification token is invalid."),
+            AppError::JsonError(e) => e.fmt(f),
+        }
     }
 }
 
-impl From<aes_gcm::Error> for Error {
-    fn from(_: aes_gcm::Error) -> Self {
-        Self::InvalidCredentials // I wish the error was more transparent
+impl From<diesel::result::Error> for AppError {
+    fn from(err: diesel::result::Error) -> Self {
+        Self::InternalError { cause: err.into() }
     }
 }
 
-impl From<r2d2::Error> for Error {
-    fn from(_: r2d2::Error) -> Self {
-        Self::InternalError
+impl From<lettre::error::Error> for AppError {
+    fn from(err: lettre::error::Error) -> Self {
+        Self::InternalError { cause: err.into() }
     }
 }
 
-impl<E: std::fmt::Debug + Into<Self>> From<actix_web::error::BlockingError<E>> for Error {
+impl From<lettre::transport::smtp::Error> for AppError {
+    fn from(err: lettre::transport::smtp::Error) -> Self {
+        Self::InternalError { cause: err.into() }
+    }
+}
+
+impl From<RedisError> for AppError {
+    fn from(err: RedisError) -> Self {
+        Self::InternalError { cause: err.into() }
+    }
+}
+
+impl From<pbkdf2::password_hash::Error> for AppError {
+    fn from(err: pbkdf2::password_hash::Error) -> Self {
+        use pbkdf2::password_hash::Error::*;
+
+        match err {
+            Password => Self::InvalidEmailPassword,
+            _ => Self::InternalError {
+                cause: err.to_string().into(),
+            },
+        }
+    }
+}
+
+impl<E: std::fmt::Debug + Into<Self>> From<actix_web::error::BlockingError<E>> for AppError {
     fn from(err: actix_web::error::BlockingError<E>) -> Self {
         use actix_web::error::BlockingError::{Canceled, Error};
 
         match err {
             Error(e) => e.into(),
-            Canceled => Self::InternalError,
+            Canceled => Self::InternalError {
+                cause: "Blocking task canceled".into(),
+            },
         }
     }
 }
 
-impl From<jsonwebtoken::errors::Error> for Error {
-    fn from(err: jsonwebtoken::errors::Error) -> Self {
-        use self::Error::{InternalError, InvalidCredentials};
-        use jsonwebtoken::errors::ErrorKind::*;
+impl From<r2d2::Error> for AppError {
+    fn from(err: r2d2::Error) -> Self {
+        Self::InternalError { cause: err.into() }
+    }
+}
 
-        match err.kind() {
-            InvalidToken | InvalidSignature | InvalidAlgorithmName | InvalidAlgorithm
-            | ExpiredSignature | InvalidIssuer | InvalidAudience | InvalidSubject
-            | ImmatureSignature | Json(_) | Utf8(_) | Base64(_) => InvalidCredentials,
-            InvalidKeyFormat | Crypto(_) | InvalidEcdsaKey | InvalidRsaKey | __Nonexhaustive => {
-                InternalError
+impl From<JsonPayloadError> for AppError {
+    fn from(err: JsonPayloadError) -> Self {
+        match err {
+            JsonPayloadError::Overflow => Self::BadRequest,
+            JsonPayloadError::ContentType => Self::BadRequest,
+            JsonPayloadError::Deserialize(e) => Self::JsonError(e),
+            JsonPayloadError::Payload(_) => Self::BadRequest,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct ErrorJson {
+    pub code: String,
+    pub message: String,
+}
+
+impl From<&AppError> for ErrorJson {
+    fn from(err: &AppError) -> Self {
+        Self {
+            code: err.code().to_string(),
+            message: err.to_string(),
+        }
+    }
+}
+
+pub type AppResult<T> = Result<T, AppError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn error_kind_serialization() {
+        assert_eq!(
+            AppError::InternalError {
+                cause: "Secret error".into()
             }
-        }
+            .code(),
+            "internal_error"
+        )
     }
 }
-
-pub type AppResult<T> = Result<T, Error>;

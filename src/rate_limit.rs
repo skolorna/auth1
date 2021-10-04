@@ -7,7 +7,7 @@ use r2d2_redis::redis;
 
 use crate::{
     db::redis::RedisConn,
-    errors::{AppResult, Error},
+    errors::{AppError, AppResult},
 };
 
 pub trait RateLimit {
@@ -67,7 +67,7 @@ impl RateLimit for SlidingWindow {
         let count = self.record(client, redis)?;
 
         if count > self.max_requests {
-            Err(Error::RateLimitExceeded { retry_after: None })
+            Err(AppError::TooManyRequests { retry_after: None })
         } else {
             Ok(self.max_requests - count)
         }

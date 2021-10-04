@@ -1,7 +1,5 @@
 use pbkdf2::password_hash::PasswordVerifier;
 
-use crate::errors::{AppResult, Error};
-
 /// Hash and salt a password.
 /// ```
 /// use auth1::crypto::hash_password;
@@ -12,7 +10,7 @@ use crate::errors::{AppResult, Error};
 ///
 /// # Errors
 /// The function throws an error if the hashing fails.
-pub fn hash_password(password: &[u8]) -> AppResult<String> {
+pub fn hash_password(password: &[u8]) -> Result<String, pbkdf2::password_hash::Error> {
     use pbkdf2::{
         password_hash::{PasswordHasher, SaltString},
         Pbkdf2,
@@ -21,10 +19,7 @@ pub fn hash_password(password: &[u8]) -> AppResult<String> {
 
     let salt = SaltString::generate(&mut OsRng);
 
-    Pbkdf2
-        .hash_password_simple(password, &salt)
-        .map(|h| h.to_string())
-        .map_err(|_| Error::InternalError)
+    Ok(Pbkdf2.hash_password_simple(password, &salt)?.to_string())
 }
 
 /// Compare a password against a hashed value.

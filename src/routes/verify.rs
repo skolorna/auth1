@@ -5,7 +5,7 @@ use crate::client_info::ClientInfo;
 use crate::db::postgres::PgPool;
 use crate::db::redis::RedisPool;
 use crate::email::{Emails, EMAIL_RATE_LIMIT};
-use crate::errors::{AppResult, Error};
+use crate::errors::{AppError, AppResult};
 use crate::identity::Identity;
 
 use crate::rate_limit::RateLimit;
@@ -33,7 +33,7 @@ async fn resend_verification(
     ident: Identity,
 ) -> AppResult<HttpResponse> {
     if ident.user.verified {
-        return Err(Error::AlreadyVerified);
+        return Err(AppError::BadRequest);
     }
 
     web::block(move || {

@@ -29,7 +29,7 @@ use db::{
     redis::{redis_pool_from_env, RedisPool},
 };
 use email::Emails;
-use errors::Error;
+use errors::AppError;
 use models::User;
 use types::{EmailAddress, Password};
 
@@ -41,7 +41,7 @@ pub fn login_with_password(
 ) -> AppResult<User> {
     let user = match User::find_by_email(conn, email)? {
         Some(user) => user,
-        None => return Err(Error::InvalidCredentials),
+        None => return Err(AppError::InvalidEmailPassword),
     };
 
     verify_password(password.as_bytes(), &user.hash())?;
@@ -74,6 +74,7 @@ macro_rules! create_app {
         use actix_cors::Cors;
         use actix_web::middleware::{normalize, Logger};
         use actix_web::{web, App};
+        use auth1::errors::AppError;
 
         let auth1::AppConfig {
             pg,
@@ -93,8 +94,7 @@ macro_rules! create_app {
             .data(emails)
             .app_data(client)
             .app_data(
-                web::JsonConfig::default()
-                    .error_handler(|err, _req| actix_web::error::ErrorBadRequest(err)),
+                web::JsonConfig::default().error_handler(|err, _req| AppError::from(err).into()),
             )
             .wrap(cors)
             .wrap(normalize::NormalizePath::new(

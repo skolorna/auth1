@@ -12,7 +12,7 @@ use lettre::{
 };
 
 use crate::{
-    errors::{AppResult, Error},
+    errors::{AppError, AppResult},
     models::User,
     rate_limit::SlidingWindow,
     token::VerificationToken,
@@ -114,7 +114,9 @@ impl Emails {
             EmailBackend::FileSystem { path } => {
                 FileTransport::new(path)
                     .send(&email)
-                    .map_err(|_| Error::InternalError)?;
+                    .map_err(|_| AppError::InternalError {
+                        cause: "Failed to save email file".into(),
+                    })?;
             }
             EmailBackend::Memory { mails } => mails.lock().unwrap().push(StoredEmail {
                 to: recipient.to_string(),

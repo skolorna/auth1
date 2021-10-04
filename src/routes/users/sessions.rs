@@ -6,7 +6,7 @@ use diesel::prelude::*;
 
 use crate::{
     db::postgres::PgPool,
-    errors::{AppResult, Error},
+    errors::{AppError, AppResult},
     identity::Identity,
     models::{
         session::{SessionId, SessionInfo},
@@ -52,7 +52,7 @@ async fn delete_session(
     .await?;
 
     if num_deleted < 1 {
-        Err(Error::KeyNotFound)
+        Err(AppError::SessionNotFound)
     } else {
         Ok(HttpResponse::NoContent().body(""))
     }

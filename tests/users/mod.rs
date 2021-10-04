@@ -97,7 +97,7 @@ async fn test_login(
             }),
         )
         .await;
-    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 
     let (res, status) = server
         .post_json(

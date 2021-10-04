@@ -3,7 +3,7 @@ use std::convert::{TryFrom, TryInto};
 use crate::crypto::{hash_password, verify_password};
 use crate::db::postgres::PgConn;
 use crate::email::Emails;
-use crate::errors::{AppResult, Error};
+use crate::errors::{AppError, AppResult};
 use crate::schema::users;
 use crate::token::VerificationToken;
 use crate::types::{EmailAddress, Password, PersonalName};
@@ -59,7 +59,7 @@ impl UserChangeset {
 }
 
 impl TryFrom<UpdateUser> for UserChangeset {
-    type Error = Error;
+    type Error = AppError;
 
     fn try_from(u: UpdateUser) -> Result<Self, Self::Error> {
         let UpdateUser {
@@ -78,7 +78,7 @@ impl TryFrom<UpdateUser> for UserChangeset {
         };
 
         if cs.is_empty() {
-            Err(Error::NoUserChanges)
+            Err(AppError::BadRequest)
         } else {
             Ok(cs)
         }
@@ -191,13 +191,13 @@ impl From<User> for JsonUser {
     }
 }
 
-fn handle_diesel_error(e: diesel::result::Error) -> Error {
+fn handle_diesel_error(e: diesel::result::Error) -> AppError {
     use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
 
     match e {
         DatabaseError(DatabaseErrorKind::UniqueViolation, ref info) => {
             match info.constraint_name() {
-                Some("users_email_key") => Error::EmailInUse,
+                Some("users_email_key") => AppError::EmailInUse,
                 _ => e.into(),
             }
         }
