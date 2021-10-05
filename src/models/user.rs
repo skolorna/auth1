@@ -6,7 +6,7 @@ use crate::email::Emails;
 use crate::errors::{AppError, AppResult};
 use crate::schema::users;
 use crate::token::VerificationToken;
-use crate::types::{EmailAddress, Password, PersonalName};
+use crate::types::{EmailAddress, PersonalName};
 
 use chrono::{DateTime, Utc};
 use diesel::{insert_into, prelude::*};
@@ -32,14 +32,14 @@ pub struct User {
 #[derive(Debug, Deserialize)]
 pub struct CreateUser {
     pub email: EmailAddress,
-    pub password: Password,
+    pub password: String,
     pub full_name: PersonalName,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateUser {
-    pub password: Password,
-    pub new_password: Option<Password>,
+    pub password: String,
+    pub new_password: Option<String>,
     pub email: Option<EmailAddress>,
     pub full_name: Option<PersonalName>,
 }
@@ -69,7 +69,7 @@ impl TryFrom<UpdateUser> for UserChangeset {
             full_name,
         } = u;
 
-        let hash = new_password.map_or(Ok(None), |p| hash_password(p.as_bytes()).map(Some))?;
+        let hash = new_password.map_or(Ok(None), |p| hash_password(&p).map(Some))?;
 
         let cs = Self {
             hash,
@@ -78,7 +78,7 @@ impl TryFrom<UpdateUser> for UserChangeset {
         };
 
         if cs.is_empty() {
-            Err(AppError::BadRequest)
+            Err(AppError::BadRequest(Some("No changes specified.".into())))
         } else {
             Ok(cs)
         }
@@ -102,7 +102,7 @@ impl User {
 
     /// Update the user while verifying that the password is correct.
     pub fn update(&self, emails: &Emails, pg: &PgConn, update: UpdateUser) -> AppResult<Self> {
-        verify_password(update.password.as_bytes(), &self.hash())?;
+        verify_password(&update.password, &self.hash())?;
 
         let cs: UserChangeset = update.try_into()?;
 
@@ -135,7 +135,7 @@ pub struct NewUser<'a> {
 
 impl<'a> NewUser<'a> {
     pub fn new(query: &'a CreateUser) -> AppResult<Self> {
-        let hash = hash_password(query.password.as_bytes())?;
+        let hash = hash_password(&query.password)?;
 
         Ok(Self {
             id: Uuid::new_v4(),

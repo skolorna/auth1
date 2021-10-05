@@ -31,20 +31,16 @@ use db::{
 use email::Emails;
 use errors::AppError;
 use models::User;
-use types::{EmailAddress, Password};
+use types::EmailAddress;
 
 /// Login using email and password.
-pub fn login_with_password(
-    conn: &PgConn,
-    email: &EmailAddress,
-    password: &Password,
-) -> AppResult<User> {
+pub fn login_with_password(conn: &PgConn, email: &EmailAddress, password: &str) -> AppResult<User> {
     let user = match User::find_by_email(conn, email)? {
         Some(user) => user,
         None => return Err(AppError::InvalidEmailPassword),
     };
 
-    verify_password(password.as_bytes(), &user.hash())?;
+    verify_password(password, &user.hash())?;
 
     Ok(user)
 }

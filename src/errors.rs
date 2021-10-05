@@ -7,6 +7,9 @@ use actix_web::{
 use chrono::{DateTime, Utc};
 use r2d2_redis::redis::RedisError;
 use serde::Serialize;
+use zxcvbn::ZxcvbnError;
+
+use crate::crypto::PasswordFeedback;
 
 #[derive(Debug)]
 pub enum AppError {
@@ -20,11 +23,15 @@ pub enum AppError {
     },
     SessionNotFound,
     InvalidAccessToken,
-    BadRequest,
+    BadRequest(Option<String>),
     MissingAccessToken,
     InvalidRefreshToken,
     InvalidVerificationToken,
     JsonError(serde_json::Error),
+    PayloadTooLarge,
+    WeakPassword {
+        feedback: Option<PasswordFeedback>,
+    },
 }
 
 impl ResponseError for AppError {
@@ -36,11 +43,13 @@ impl ResponseError for AppError {
             AppError::TooManyRequests { .. } => StatusCode::TOO_MANY_REQUESTS,
             AppError::SessionNotFound => StatusCode::NOT_FOUND,
             AppError::InvalidAccessToken => StatusCode::FORBIDDEN,
-            AppError::BadRequest => StatusCode::BAD_REQUEST,
+            AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
             AppError::MissingAccessToken => StatusCode::UNAUTHORIZED,
             AppError::InvalidRefreshToken => StatusCode::BAD_REQUEST,
             AppError::InvalidVerificationToken => StatusCode::BAD_REQUEST,
             AppError::JsonError(_) => StatusCode::BAD_REQUEST,
+            AppError::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
+            AppError::WeakPassword { .. } => StatusCode::BAD_REQUEST,
         }
     }
 
@@ -60,11 +69,13 @@ impl AppError {
             AppError::TooManyRequests { .. } => "too_many_requests",
             AppError::SessionNotFound => "session_not_found",
             AppError::InvalidAccessToken => "invalid_access_token",
-            AppError::BadRequest => "bad_request",
+            AppError::BadRequest(_) => "bad_request",
             AppError::MissingAccessToken => "missing_access_token",
             AppError::InvalidRefreshToken => "invalid_refresh_token",
             AppError::InvalidVerificationToken => "invalid_verification_token",
             AppError::JsonError(_) => "invalid_body",
+            AppError::PayloadTooLarge => "too_large",
+            AppError::WeakPassword { .. } => "weak_password",
         }
     }
 }
@@ -78,13 +89,21 @@ impl Display for AppError {
             AppError::TooManyRequests { .. } => write!(f, "Too many requests."),
             AppError::SessionNotFound => write!(f, "Session not found."),
             AppError::InvalidAccessToken => write!(f, "Invalid access token."),
-            AppError::BadRequest => write!(f, "Bad request."),
+            AppError::BadRequest(m) => match m {
+                Some(m) => write!(f, "{}", m),
+                None => write!(f, "Bad request."),
+            },
             AppError::MissingAccessToken => write!(f, "Access token is missing."),
             AppError::InvalidRefreshToken => {
                 write!(f, "Invalid refresh token. Maybe it has expired?")
             }
             AppError::InvalidVerificationToken => write!(f, "The verification token is invalid."),
             AppError::JsonError(e) => e.fmt(f),
+            AppError::PayloadTooLarge => write!(f, "Payload too large"),
+            AppError::WeakPassword { feedback } => match feedback {
+                Some(feedback) => write!(f, "{}", feedback),
+                _ => write!(f, "Password is too weak."),
+            },
         }
     }
 }
@@ -148,10 +167,19 @@ impl From<r2d2::Error> for AppError {
 impl From<JsonPayloadError> for AppError {
     fn from(err: JsonPayloadError) -> Self {
         match err {
-            JsonPayloadError::Overflow => Self::BadRequest,
-            JsonPayloadError::ContentType => Self::BadRequest,
+            JsonPayloadError::Overflow => Self::PayloadTooLarge,
+            JsonPayloadError::ContentType => Self::BadRequest(Some("Wrong content type.".into())),
             JsonPayloadError::Deserialize(e) => Self::JsonError(e),
-            JsonPayloadError::Payload(_) => Self::BadRequest,
+            JsonPayloadError::Payload(_) => Self::BadRequest(None),
+        }
+    }
+}
+
+impl From<ZxcvbnError> for AppError {
+    fn from(err: ZxcvbnError) -> Self {
+        match err {
+            ZxcvbnError::BlankPassword => Self::WeakPassword { feedback: None },
+            ZxcvbnError::DurationOutOfRange => Self::InternalError { cause: err.into() },
         }
     }
 }

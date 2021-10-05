@@ -33,7 +33,7 @@ async fn resend_verification(
     ident: Identity,
 ) -> AppResult<HttpResponse> {
     if ident.user.verified {
-        return Err(AppError::BadRequest);
+        return Err(AppError::BadRequest(Some("Already verified.".into())));
     }
 
     web::block(move || {

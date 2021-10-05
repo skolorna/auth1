@@ -83,7 +83,7 @@ impl Server {
     }
 
     pub async fn create_user(&self, full_name: &str, email: &str, password: &str) -> TestUser {
-        let (_, status) = self
+        let (res, status) = self
             .post_json(
                 "/register",
                 json!({
@@ -96,8 +96,9 @@ impl Server {
         assert_eq!(
             status,
             StatusCode::CREATED,
-            "failed to create user {} (did you clean your database?)",
-            email
+            "failed to create user {} (did you clean your database?) {}",
+            email,
+            res
         );
 
         let (res, status) = self.login_user(email, password).await;
