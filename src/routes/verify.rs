@@ -1,13 +1,14 @@
-use actix_web::{post, web, HttpResponse};
+use actix_web::{web, HttpResponse};
 use serde::Deserialize;
 
 use crate::client_info::ClientInfo;
 use crate::db::postgres::PgPool;
 use crate::db::redis::RedisPool;
-use crate::email::{send_verification_email, SmtpConnection, EMAIL_RATE_LIMIT};
+use crate::email::{Emails, EMAIL_RATE_LIMIT};
+use crate::errors::{AppError, AppResult};
 use crate::identity::Identity;
+
 use crate::rate_limit::RateLimit;
-use crate::result::{Error, Result};
 use crate::token::VerificationToken;
 
 #[derive(Deserialize)]
@@ -15,31 +16,30 @@ pub struct VerificationQuery {
     token: VerificationToken,
 }
 
-#[post("")]
 async fn verify_email(
     pool: web::Data<PgPool>,
     info: web::Json<VerificationQuery>,
-) -> Result<HttpResponse> {
+) -> AppResult<HttpResponse> {
     let conn = pool.get()?;
     info.token.verify(&conn)?;
 
     Ok(HttpResponse::Ok().body("success"))
 }
 
-#[post("/resend")]
 async fn resend_verification(
     redis: web::Data<RedisPool>,
-    smtp: web::Data<SmtpConnection>,
+    emails: web::Data<Emails>,
     client_info: ClientInfo,
     ident: Identity,
-) -> Result<HttpResponse> {
+) -> AppResult<HttpResponse> {
     if ident.user.verified {
-        return Err(Error::AlreadyVerified);
+        return Err(AppError::BadRequest(Some("Already verified.".into())));
     }
 
     web::block(move || {
         EMAIL_RATE_LIMIT.remaining_requests(&client_info.addr, &mut redis.get()?)?;
-        send_verification_email(&smtp, &ident.user)
+        let token = VerificationToken::generate(&ident.user)?;
+        emails.send_user_confirmation(&ident.user, token)
     })
     .await?;
 
@@ -47,5 +47,6 @@ async fn resend_verification(
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(verify_email).service(resend_verification);
+    cfg.service(web::resource("").route(web::post().to(verify_email)))
+        .service(web::resource("/resend").route(web::post().to(resend_verification)));
 }

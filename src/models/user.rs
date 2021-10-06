@@ -2,14 +2,15 @@ use std::convert::{TryFrom, TryInto};
 
 use crate::crypto::{hash_password, verify_password};
 use crate::db::postgres::PgConn;
-use crate::email::{send_verification_email, SmtpConnection};
-use crate::result::{Error, Result};
+use crate::email::Emails;
+use crate::errors::{AppError, AppResult};
 use crate::schema::users;
-use crate::types::{EmailAddress, Password, PersonalName};
+use crate::token::VerificationToken;
+use crate::types::{EmailAddress, PersonalName};
 
 use chrono::{DateTime, Utc};
-use diesel::prelude::*;
-use lettre_email::Mailbox;
+use diesel::{insert_into, prelude::*};
+use lettre::message::Mailbox;
 use pbkdf2::password_hash::PasswordHash;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -31,14 +32,14 @@ pub struct User {
 #[derive(Debug, Deserialize)]
 pub struct CreateUser {
     pub email: EmailAddress,
-    pub password: Password,
+    pub password: String,
     pub full_name: PersonalName,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateUser {
-    pub password: Password,
-    pub new_password: Option<Password>,
+    pub password: String,
+    pub new_password: Option<String>,
     pub email: Option<EmailAddress>,
     pub full_name: Option<PersonalName>,
 }
@@ -58,9 +59,9 @@ impl UserChangeset {
 }
 
 impl TryFrom<UpdateUser> for UserChangeset {
-    type Error = Error;
+    type Error = AppError;
 
-    fn try_from(u: UpdateUser) -> core::result::Result<Self, Self::Error> {
+    fn try_from(u: UpdateUser) -> Result<Self, Self::Error> {
         let UpdateUser {
             password: _,
             new_password,
@@ -68,7 +69,7 @@ impl TryFrom<UpdateUser> for UserChangeset {
             full_name,
         } = u;
 
-        let hash = new_password.map_or(Ok(None), |p| hash_password(p.as_bytes()).map(Some))?;
+        let hash = new_password.map_or(Ok(None), |p| hash_password(&p).map(Some))?;
 
         let cs = Self {
             hash,
@@ -77,51 +78,22 @@ impl TryFrom<UpdateUser> for UserChangeset {
         };
 
         if cs.is_empty() {
-            Err(Error::NoUserChanges)
+            Err(AppError::BadRequest(Some("No changes specified.".into())))
         } else {
             Ok(cs)
         }
     }
 }
 
-fn map_diesel_error(err: diesel::result::Error) -> Error {
-    use diesel::result::{
-        DatabaseErrorKind,
-        Error::{DatabaseError, NotFound},
-    };
-
-    match err {
-        NotFound => Error::UserNotFound,
-        DatabaseError(DatabaseErrorKind::UniqueViolation, _) => Error::EmailInUse,
-        _ => err.into(),
-    }
-}
-
 impl User {
-    pub fn find_by_email(conn: &PgConn, email: &EmailAddress) -> Result<Self> {
+    pub fn find_by_email(conn: &PgConn, email: &EmailAddress) -> QueryResult<Option<Self>> {
         use crate::schema::users::{columns, dsl::users};
-        users
+        let user = users
             .filter(columns::email.eq(email))
             .first(conn)
-            .map_err(map_diesel_error)
-    }
+            .optional()?;
 
-    pub fn create(conn: &PgConn, query: &CreateUser) -> Result<Self> {
-        let hash = hash_password(query.password.as_bytes())?;
-
-        let new_user = NewUser {
-            id: Uuid::new_v4(),
-            email: query.email.as_str(),
-            hash: &hash,
-            full_name: query.full_name.as_str(),
-        };
-
-        let inserted_row = diesel::insert_into(users::table)
-            .values(&new_user)
-            .get_result(conn)
-            .map_err(map_diesel_error)?;
-
-        Ok(inserted_row)
+        Ok(user)
     }
 
     pub fn hash(&self) -> PasswordHash {
@@ -129,25 +101,26 @@ impl User {
     }
 
     /// Update the user while verifying that the password is correct.
-    pub fn update(&self, smtp: &SmtpConnection, pg: &PgConn, update: UpdateUser) -> Result<Self> {
-        verify_password(update.password.as_bytes(), &self.hash())?;
+    pub fn update(&self, emails: &Emails, pg: &PgConn, update: UpdateUser) -> AppResult<Self> {
+        verify_password(&update.password, &self.hash())?;
 
         let cs: UserChangeset = update.try_into()?;
 
         let result = diesel::update(self)
             .set(cs)
             .get_result::<Self>(pg)
-            .map_err(map_diesel_error)?;
+            .map_err(handle_diesel_error)?;
 
         if result.email != self.email {
-            send_verification_email(smtp, &result)?;
+            let token = VerificationToken::generate(&result)?;
+            let _ = emails.send_user_confirmation(&result, token);
         }
 
         Ok(result)
     }
 
     pub fn mailbox(&self) -> Mailbox {
-        Mailbox::new_with_name(self.full_name.to_string(), self.email.to_string())
+        Mailbox::new(Some(self.full_name.to_string()), self.email.clone().into())
     }
 }
 
@@ -155,9 +128,35 @@ impl User {
 #[table_name = "users"]
 pub struct NewUser<'a> {
     pub id: UserId,
-    pub email: &'a str,
-    pub hash: &'a str,
+    pub email: &'a EmailAddress,
+    pub hash: String,
     pub full_name: &'a str,
+}
+
+impl<'a> NewUser<'a> {
+    pub fn new(query: &'a CreateUser) -> AppResult<Self> {
+        let hash = hash_password(&query.password)?;
+
+        Ok(Self {
+            id: Uuid::new_v4(),
+            email: &query.email,
+            hash,
+            full_name: query.full_name.as_str(),
+        })
+    }
+
+    pub fn create(&self, conn: &PgConn, emails: &Emails) -> AppResult<User> {
+        conn.transaction(|| {
+            let user: User = insert_into(users::table)
+                .values(self)
+                .get_result(conn)
+                .map_err(handle_diesel_error)?;
+            let token = VerificationToken::generate(&user)?;
+            let _ = emails.send_user_confirmation(&user, token);
+
+            Ok(user)
+        })
+    }
 }
 
 /// Public-facing version of [User], excluding sensitive data
@@ -192,12 +191,26 @@ impl From<User> for JsonUser {
     }
 }
 
+fn handle_diesel_error(e: diesel::result::Error) -> AppError {
+    use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
+
+    match e {
+        DatabaseError(DatabaseErrorKind::UniqueViolation, ref info) => {
+            match info.constraint_name() {
+                Some("users_email_key") => AppError::EmailInUse,
+                _ => e.into(),
+            }
+        }
+        _ => e.into(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::NaiveDateTime;
     use serde_json::json;
 
-    use crate::{db::postgres::pg_test_conn, result::Error};
+    use crate::db::postgres::pg_test_conn;
 
     use super::*;
 
@@ -229,10 +242,10 @@ mod tests {
     fn get_user_by_email() {
         let conn = pg_test_conn();
 
-        match User::find_by_email(&conn, &"nonexistentuser@example.com".parse().unwrap()) {
-            Err(Error::UserNotFound) => {}
-            Err(other_error) => panic!("incorrect error ({})", other_error),
-            Ok(_) => panic!("that user should not exist"),
-        }
+        assert!(
+            User::find_by_email(&conn, &"nonexistentuser@example.com".parse().unwrap())
+                .unwrap()
+                .is_none()
+        );
     }
 }

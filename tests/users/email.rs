@@ -8,27 +8,27 @@ async fn update_email() {
     let server = Server::new();
 
     let alice = server
-        .create_user("Alice", "alice@example.com", "hunter4$$")
+        .create_user("Alice", "alice@example.com", "hNLgGYPLfBdAMBWgZOj9MXL7")
         .await;
 
     // Expect one verification email
-    assert!(server.pop_email().is_some());
-    assert!(server.pop_email().is_none());
+    assert!(server.pop_mail().is_some());
+    assert!(server.pop_mail().is_none());
 
     let _bob = server
-        .create_user("Bob", "bob@example.com", "bobrocks")
+        .create_user("Bob", "bob@example.com", "Yi+QfDG0FEkBO2NH")
         .await;
 
     // Expect one verification email
-    assert!(server.pop_email().is_some());
-    assert!(server.pop_email().is_none());
+    assert!(server.pop_mail().is_some());
+    assert!(server.pop_mail().is_none());
 
     let req = alice
         .req()
         .method(Method::PATCH)
         .uri("/users/@me")
         .set_json(&json!({
-                "password": "hunter4$$",
+                "password": "hNLgGYPLfBdAMBWgZOj9MXL7",
                 "email": "bob@example.com"
         }));
     let (_, status) = server.send_json(req).await;
@@ -39,7 +39,7 @@ async fn update_email() {
         .method(Method::PATCH)
         .uri("/users/@me")
         .set_json(&json!({
-            "password": "hunter4$$",
+            "password": "hNLgGYPLfBdAMBWgZOj9MXL7",
             "email": "coolalice@example.com"
         }));
     let (res, status) = server.send_json(req).await;
@@ -48,14 +48,14 @@ async fn update_email() {
     assert_eq!(res["verified"].as_bool(), Some(false));
 
     // Email verification request
-    assert!(server.pop_email().is_some());
-    assert!(server.pop_email().is_none());
+    assert!(server.pop_mail().is_some());
+    assert!(server.pop_mail().is_none());
 
     let req = alice.req().method(Method::POST).uri("/verify/resend");
     let (res, status) = server.send(req).await;
     assert!(res.is_empty());
     assert_eq!(status, StatusCode::NO_CONTENT);
 
-    assert!(server.pop_email().is_some());
-    assert!(server.pop_email().is_none());
+    assert!(server.pop_mail().is_some());
+    assert!(server.pop_mail().is_none());
 }

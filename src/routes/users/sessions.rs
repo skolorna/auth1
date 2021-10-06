@@ -1,5 +1,4 @@
 use actix_web::{
-    delete, get,
     http::header::{CacheControl, CacheDirective},
     web, HttpResponse,
 };
@@ -7,16 +6,15 @@ use diesel::prelude::*;
 
 use crate::{
     db::postgres::PgPool,
+    errors::{AppError, AppResult},
     identity::Identity,
     models::{
         session::{SessionId, SessionInfo},
         Session,
     },
-    result::{Error, Result},
 };
 
-#[get("")]
-async fn list_sessions(pool: web::Data<PgPool>, ident: Identity) -> Result<HttpResponse> {
+async fn list_sessions(pool: web::Data<PgPool>, ident: Identity) -> AppResult<HttpResponse> {
     use crate::schema::sessions::columns;
     let conn = pool.get()?;
     let res = web::block(move || {
@@ -32,8 +30,7 @@ async fn list_sessions(pool: web::Data<PgPool>, ident: Identity) -> Result<HttpR
         .json(res))
 }
 
-#[delete("")]
-async fn clear_sessions(pool: web::Data<PgPool>, ident: Identity) -> Result<HttpResponse> {
+async fn clear_sessions(pool: web::Data<PgPool>, ident: Identity) -> AppResult<HttpResponse> {
     let conn = pool.get()?;
     let num_deleted =
         web::block(move || diesel::delete(Session::belonging_to(&ident.user)).execute(&conn))
@@ -42,12 +39,11 @@ async fn clear_sessions(pool: web::Data<PgPool>, ident: Identity) -> Result<Http
     Ok(HttpResponse::Ok().body(format!("deleted {} keys", num_deleted)))
 }
 
-#[delete("/{id}")]
 async fn delete_session(
     pool: web::Data<PgPool>,
     ident: Identity,
     web::Path(id): web::Path<SessionId>,
-) -> Result<HttpResponse> {
+) -> AppResult<HttpResponse> {
     let conn = pool.get()?;
     let num_deleted = web::block(move || {
         diesel::delete(Session::belonging_to(&ident.user).filter(Session::with_id(id)))
@@ -56,14 +52,17 @@ async fn delete_session(
     .await?;
 
     if num_deleted < 1 {
-        Err(Error::KeyNotFound)
+        Err(AppError::SessionNotFound)
     } else {
         Ok(HttpResponse::NoContent().body(""))
     }
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(list_sessions)
-        .service(clear_sessions)
-        .service(delete_session);
+    cfg.service(
+        web::resource("")
+            .route(web::get().to(list_sessions))
+            .route(web::delete().to(clear_sessions)),
+    )
+    .service(web::resource("/{id}").route(web::delete().to(delete_session)));
 }

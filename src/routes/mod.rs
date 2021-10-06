@@ -1,11 +1,11 @@
 pub mod keys;
 pub mod login;
-pub mod refresh;
+pub mod register;
+pub mod token;
 pub mod users;
 pub mod verify;
 
 use actix_web::{
-    get,
     http::header::{CacheControl, CacheDirective},
     web, HttpResponse,
 };
@@ -17,8 +17,6 @@ pub struct HealthResponse {
     pub version: String,
 }
 
-// TODO: Check if the database if healthy, too.
-#[get("/health")]
 async fn get_health() -> HttpResponse {
     return HttpResponse::Ok()
         .set(CacheControl(vec![CacheDirective::NoStore]))
@@ -29,10 +27,11 @@ async fn get_health() -> HttpResponse {
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(get_health)
+    cfg.service(web::resource("/health").route(web::get().to(get_health)))
         .service(web::scope("/users").configure(users::configure))
         .service(web::scope("/login").configure(login::configure))
         .service(web::scope("/keys").configure(keys::configure))
         .service(web::scope("/verify").configure(verify::configure))
-        .service(web::scope("/refresh").configure(refresh::configure));
+        .service(web::scope("/token").configure(token::configure))
+        .service(web::scope("/register").configure(register::configure));
 }

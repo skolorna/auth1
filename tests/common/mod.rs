@@ -10,11 +10,10 @@ use auth1::{
     client_info::ClientInfoConfig,
     create_app,
     db::{postgres::pg_pool_from_env, redis::redis_pool_from_env},
-    email::SmtpConnection,
+    email::{Emails, StoredEmail},
     AppConfig,
 };
 use dotenv::dotenv;
-use lettre::Envelope;
 use serde_json::{json, Value};
 
 use self::test_user::TestUser;
@@ -30,7 +29,7 @@ impl Server {
         Self(AppConfig {
             redis: redis_pool_from_env(),
             pg: pg_pool_from_env(),
-            smtp: SmtpConnection::new_test_inbox(),
+            emails: Emails::new_in_memory(),
             client: ClientInfoConfig::default(),
         })
     }
@@ -84,9 +83,9 @@ impl Server {
     }
 
     pub async fn create_user(&self, full_name: &str, email: &str, password: &str) -> TestUser {
-        let (_, status) = self
+        let (res, status) = self
             .post_json(
-                "/users",
+                "/register",
                 json!({
                     "full_name": full_name,
                     "email": email,
@@ -97,8 +96,9 @@ impl Server {
         assert_eq!(
             status,
             StatusCode::CREATED,
-            "failed to create user {}",
-            email
+            "failed to create user {} (did you clean your database?) {}",
+            email,
+            res
         );
 
         let (res, status) = self.login_user(email, password).await;
@@ -118,11 +118,11 @@ impl Server {
         .await
     }
 
-    pub fn inbox(&self) -> MutexGuard<Vec<(Envelope, String)>> {
-        self.0.smtp.get_test_inbox()
+    pub fn mails(&self) -> MutexGuard<Vec<StoredEmail>> {
+        self.0.emails.mails_in_memory().unwrap()
     }
 
-    pub fn pop_email(&self) -> Option<(Envelope, String)> {
-        self.inbox().pop()
+    pub fn pop_mail(&self) -> Option<StoredEmail> {
+        self.mails().pop()
     }
 }

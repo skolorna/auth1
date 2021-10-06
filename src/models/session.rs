@@ -5,16 +5,16 @@ use diesel::{
     prelude::*,
     sql_types::{self, Timestamptz},
 };
-use openssl::rsa::Rsa;
+use openssl::{error::ErrorStack, rsa::Rsa};
 use serde::Serialize;
 use uuid::Uuid;
 
 use super::user::{User, UserId};
 use crate::{
     db::postgres::PgConn,
-    result::{Error, Result},
+    errors::{AppError, AppResult},
     schema::sessions,
-    token::{refresh_token::RefreshToken, AccessToken},
+    token::{refresh_token::RefreshToken, TokenResponse},
 };
 
 /// FIXME: In the future, it's probably better to use some sort of clock-based uuid generation:
@@ -36,14 +36,12 @@ pub struct Session {
     pub exp: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize)]
-pub struct CreatedSession {
-    pub refresh_token: RefreshToken,
-    pub access_token: AccessToken,
-}
-
 type NotExpired = Gt<sessions::columns::exp, Bound<Timestamptz, DateTime<Utc>>>;
 type WithId = Eq<sessions::columns::id, Bound<sql_types::Uuid, Uuid>>;
+
+fn map_rsa_err(err: ErrorStack) -> AppError {
+    AppError::InternalError { cause: err.into() }
+}
 
 impl Session {
     pub const RSA_BITS: u32 = 2048;
@@ -58,15 +56,15 @@ impl Session {
 
     /// Create a new session for a specific user and insert the session into the
     /// database. A refresh token is generated and returned.
-    pub fn create(conn: &PgConn, sub: UserId) -> Result<CreatedSession> {
+    pub fn create(conn: &PgConn, sub: UserId) -> AppResult<TokenResponse> {
         let id = Uuid::new_v4();
-        let refresh_token = RefreshToken::generate_secret(id);
+        let refresh_token = RefreshToken::generate(id);
 
         let (public_pem, private_der) = {
-            let rsa = Rsa::generate(Self::RSA_BITS).map_err(|_| Error::InternalError)?;
+            let rsa = Rsa::generate(Self::RSA_BITS).map_err(map_rsa_err)?;
             (
-                rsa.public_key_to_pem().map_err(|_| Error::InternalError)?,
-                rsa.private_key_to_der().map_err(|_| Error::InternalError)?,
+                rsa.public_key_to_pem().map_err(map_rsa_err)?,
+                rsa.private_key_to_der().map_err(map_rsa_err)?,
             )
         };
 
@@ -77,22 +75,19 @@ impl Session {
             started: now,
             exp: now + Duration::days(90),
             public_key: &public_pem,
-            private_key: &refresh_token.encrypt(&private_der)?,
+            private_key: &refresh_token.encrypt(&private_der).map_err(|e| {
+                AppError::InternalError {
+                    cause: e.to_string().into(),
+                }
+            })?,
         };
 
         let session: Self = diesel::insert_into(sessions::table)
             .values(new_session)
-            .get_result(conn)
-            .map_err(|e| match e {
-                diesel::result::Error::DatabaseError(
-                    diesel::result::DatabaseErrorKind::ForeignKeyViolation,
-                    _,
-                ) => Error::UserNotFound,
-                _ => e.into(),
-            })?;
+            .get_result(conn)?;
 
-        Ok(CreatedSession {
-            refresh_token,
+        Ok(TokenResponse {
+            refresh_token: Some(refresh_token),
             access_token: refresh_token.sign_access_token(
                 session.private_key,
                 session.sub,
@@ -109,22 +104,36 @@ impl Session {
     /// the key has expired or not as this public key is exclusively
     /// used for *validation* of access tokens that in turn have
     /// much shorter lifetimes.
-    pub fn get_pubkey(conn: &PgConn, id: SessionId) -> Result<(Vec<u8>, UserId, DateTime<Utc>)> {
+    pub fn get_pubkey(conn: &PgConn, id: SessionId) -> QueryResult<Option<PubKeyRes>> {
         use crate::schema::sessions::{columns, table};
-        let (pubkey, exp, sub): (Vec<u8>, DateTime<Utc>, UserId) = table
-            .select((columns::public_key, columns::exp, columns::sub))
-            .find(id)
-            .first(conn)
-            .map_err(|_| Error::KeyNotFound)?;
 
-        if exp > Utc::now() {
-            Ok((pubkey, sub, exp))
-        } else {
-            diesel::delete(table.find(id)).execute(conn)?;
+        conn.transaction(|| {
+            let data = table
+                .select((columns::public_key, columns::exp, columns::sub))
+                .find(id)
+                .first::<PubKeyRes>(conn)
+                .optional()?;
 
-            Err(Error::KeyNotFound)
-        }
+            if let Some(data) = data {
+                if data.exp > Utc::now() {
+                    return Ok(Some(data));
+                } else {
+                    diesel::delete(table.find(id)).execute(conn)?;
+                }
+            }
+
+            Ok(None)
+        })
     }
+}
+
+#[derive(Debug, Queryable, Associations)]
+#[belongs_to(User, foreign_key = "sub")]
+#[table_name = "sessions"]
+pub struct PubKeyRes {
+    pub pubkey: Vec<u8>,
+    pub exp: DateTime<Utc>,
+    pub sub: UserId,
 }
 
 #[derive(Debug, Queryable, Identifiable, Associations, Serialize)]
@@ -146,24 +155,4 @@ struct NewSession<'a> {
     private_key: &'a [u8],
     started: DateTime<Utc>,
     exp: DateTime<Utc>,
-}
-
-#[cfg(test)]
-mod tests {
-    use uuid::Uuid;
-
-    use crate::{db::postgres::pg_test_conn, result::Error};
-
-    use super::Session;
-
-    #[test]
-    fn issue_access_token() {
-        let conn = pg_test_conn();
-
-        match Session::create(&conn, Uuid::nil()) {
-            Err(Error::UserNotFound) => {} // Of course there isn't a nil user
-            Err(other_error) => panic!("wrong error type ({})", other_error),
-            Ok(_) => panic!("this shouldn't work"),
-        }
-    }
 }

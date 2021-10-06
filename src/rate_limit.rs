@@ -7,12 +7,12 @@ use r2d2_redis::redis;
 
 use crate::{
     db::redis::RedisConn,
-    result::{Error, Result},
+    errors::{AppError, AppResult},
 };
 
 pub trait RateLimit {
     /// Get the number of remaining requests, and fail if the quota has been exceeded.
-    fn remaining_requests(&self, client: &str, redis: &mut RedisConn) -> Result<u64>;
+    fn remaining_requests(&self, client: &str, redis: &mut RedisConn) -> AppResult<u64>;
 }
 
 pub struct SlidingWindow {
@@ -44,7 +44,7 @@ impl SlidingWindow {
         current.unwrap_or(0) + (previous.unwrap_or(0) as f64 * weight).round() as u64
     }
 
-    fn record(&self, client: &str, conn: &mut RedisConn) -> Result<u64> {
+    fn record(&self, client: &str, conn: &mut RedisConn) -> AppResult<u64> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         let current_window = self.window_id(now);
         let current_key = self.key(client, self.window_id(now));
@@ -63,11 +63,11 @@ impl SlidingWindow {
 }
 
 impl RateLimit for SlidingWindow {
-    fn remaining_requests(&self, client: &str, redis: &mut RedisConn) -> Result<u64> {
+    fn remaining_requests(&self, client: &str, redis: &mut RedisConn) -> AppResult<u64> {
         let count = self.record(client, redis)?;
 
         if count > self.max_requests {
-            Err(Error::RateLimitExceeded { retry_after: None })
+            Err(AppError::TooManyRequests { retry_after: None })
         } else {
             Ok(self.max_requests - count)
         }

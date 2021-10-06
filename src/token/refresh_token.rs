@@ -12,8 +12,8 @@ use serde::{de, Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
+    errors::{AppError, AppResult},
     models::{session::SessionId, user::UserId},
-    result::{Error, Result},
 };
 
 use super::{AccessToken, AccessTokenClaims};
@@ -27,14 +27,14 @@ pub struct RefreshToken {
 }
 
 impl RefreshToken {
-    pub const SECRET_SIZE: usize = 44;
+    const SECRET_SIZE: usize = 44;
     const MAX_B64_SIZE: usize = 4 * (Self::SECRET_SIZE + 2) / 3;
 
     pub fn new(session: SessionId, secret: Secret) -> Self {
         Self { session, secret }
     }
 
-    pub fn generate_secret(session: SessionId) -> Self {
+    pub fn generate(session: SessionId) -> Self {
         let mut data = [0_u8; Self::SECRET_SIZE];
         OsRng.fill_bytes(&mut data);
         Self::new(session, data)
@@ -53,7 +53,7 @@ impl RefreshToken {
         &self.secret[32..]
     }
 
-    pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
+    pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>, aes_gcm::Error> {
         use aes_gcm::aead::Aead;
         use aes_gcm::Nonce;
 
@@ -64,7 +64,7 @@ impl RefreshToken {
         Ok(ciphertext)
     }
 
-    pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
+    pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>, aes_gcm::Error> {
         use aes_gcm::aead::Aead;
         use aes_gcm::Nonce;
 
@@ -75,7 +75,7 @@ impl RefreshToken {
         Ok(plaintext)
     }
 
-    pub fn sign_access_token_simple(&self, conn: &PgConn) -> Result<AccessToken> {
+    pub fn sign_access_token_simple(&self, conn: &PgConn) -> AppResult<AccessToken> {
         use crate::schema::sessions::{columns, table};
 
         let (exp, private_key, sub): (_, Vec<u8>, UserId) = table
@@ -91,16 +91,18 @@ impl RefreshToken {
         private_key: Vec<u8>,
         sub: UserId,
         max_exp: DateTime<Utc>,
-    ) -> Result<AccessToken> {
+    ) -> AppResult<AccessToken> {
         let now = Utc::now();
         // The access token must not outlive the refresh token
         let exp = (now + Duration::hours(1)).min(max_exp);
 
         if exp < now {
-            return Err(Error::InvalidCredentials);
+            return Err(AppError::InvalidRefreshToken);
         }
 
-        let der = self.decrypt(&private_key)?;
+        let der = self
+            .decrypt(&private_key)
+            .map_err(|_| AppError::InvalidRefreshToken)?;
 
         let encoding_key = EncodingKey::from_rsa_der(&der);
         let header = Header {
@@ -138,7 +140,7 @@ pub enum ParseRefreshTokenError {
 impl FromStr for RefreshToken {
     type Err = ParseRefreshTokenError;
 
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.splitn(2, '.');
 
         let session = SessionId::from_str(parts.next().unwrap())?;
@@ -168,7 +170,7 @@ impl Display for RefreshToken {
 }
 
 impl Serialize for RefreshToken {
-    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
@@ -177,7 +179,7 @@ impl Serialize for RefreshToken {
 }
 
 impl<'de> Deserialize<'de> for RefreshToken {
-    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {

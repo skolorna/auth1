@@ -1,28 +1,27 @@
-use actix_web::{post, web, HttpResponse};
+use actix_web::{web, HttpResponse};
 use serde::Deserialize;
 
 use crate::client_info::ClientInfo;
 use crate::db::postgres::PgPool;
 use crate::db::redis::RedisPool;
+use crate::errors::AppResult;
 use crate::login_with_password;
 use crate::models::Session;
 use crate::rate_limit::{RateLimit, SlidingWindow};
-use crate::result::Result;
-use crate::types::{EmailAddress, Password};
+use crate::types::EmailAddress;
 
 #[derive(Debug, Deserialize)]
 struct LoginRequest {
     pub email: EmailAddress,
-    pub password: Password,
+    pub password: String,
 }
 
-#[post("")]
 async fn handle_login(
     pg: web::Data<PgPool>,
     redis: web::Data<RedisPool>,
     credentials: web::Json<LoginRequest>,
     client_info: ClientInfo,
-) -> Result<HttpResponse> {
+) -> AppResult<HttpResponse> {
     const RATE_LIMIT: SlidingWindow = SlidingWindow::new("login", 60, 10);
 
     let client = format!("{}/{}", client_info.addr, &credentials.email);
@@ -39,5 +38,5 @@ async fn handle_login(
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(handle_login);
+    cfg.service(web::resource("").route(web::post().to(handle_login)));
 }

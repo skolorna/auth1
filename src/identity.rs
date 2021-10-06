@@ -2,8 +2,8 @@ use std::pin::Pin;
 
 use crate::{
     db::postgres::PgPool,
+    errors::AppError,
     models::User,
-    result::Error,
     token::{AccessToken, AccessTokenClaims},
 };
 
@@ -22,8 +22,8 @@ pub struct Identity {
 }
 
 impl FromRequest for Identity {
-    type Error = Error;
-    type Future = Pin<Box<dyn Future<Output = core::result::Result<Self, Error>>>>;
+    type Error = AppError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self, AppError>>>>;
     type Config = ();
 
     fn from_request(req: &actix_web::HttpRequest, _: &mut actix_web::dev::Payload) -> Self::Future {
@@ -32,7 +32,7 @@ impl FromRequest for Identity {
                 let bearer = authorization.into_scheme();
                 AccessToken::new(bearer.token())
             }
-            Err(_) => return Box::pin(async { Err(Error::MissingToken) }),
+            Err(_) => return Box::pin(async { Err(AppError::MissingAccessToken) }),
         };
 
         let pool = req
@@ -47,7 +47,7 @@ impl FromRequest for Identity {
             let claims = access_token
                 .verify_and_decode(&conn)
                 // Don't give away details about token formatting specifications.
-                .map_err(|_| Error::InvalidCredentials)?;
+                .map_err(|_| AppError::InvalidAccessToken)?;
             let user_id = claims.sub;
             let user: User = web::block(move || users::table.find(user_id).first(&conn)).await?;
 

@@ -76,9 +76,9 @@ where
     }
 }
 
-impl From<EmailAddress> for lettre::EmailAddress {
+impl From<EmailAddress> for lettre::Address {
     fn from(addr: EmailAddress) -> Self {
         // We can unwrap because it's already checked.
-        Self::new(addr.0).unwrap()
+        addr.0.parse().unwrap()
     }
 }
