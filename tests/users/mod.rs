@@ -1,4 +1,5 @@
 mod email;
+mod sessions;
 mod update;
 
 use actix_web::{http::StatusCode, test};
@@ -26,25 +27,24 @@ async fn get_nonexistent_user() {
 async fn create_user_and_login() {
     let server = Server::new();
 
-    let user1 = json!({
-        "email": "user1@example.com",
-        "password": "d0ntpwnm3",
-        "full_name": "User no. 1"
-    });
-    let (res, status) = server.post_json("/register", user1.clone()).await;
-    assert_eq!(
-        status,
-        StatusCode::CREATED,
-        "if this fails, your database is probably not clean"
-    );
-    let uid = res["id"].as_str().unwrap();
+    let _ = server
+        .create_user("User no. 1", "user1@example.com", "d0ntpwnm3")
+        .await;
 
     // Email addresses are not reusable!
-    let (_, status) = server.post_json("/register", user1).await;
+    let (_, status) = server
+        .post_json(
+            "/register",
+            json!({
+                "email": "user1@example.com",
+                "full_name": "Juan",
+                "password": "l1lxazJDJZWQnNBQ"
+            }),
+        )
+        .await;
     assert_eq!(status, StatusCode::CONFLICT);
 
-    let (access_token, refresh_token) =
-        test_login(&server, "user1@example.com", "d0ntpwnm3", uid).await;
+    let (access_token, refresh_token) = test_login(&server, "user1@example.com", "d0ntpwnm3").await;
 
     let me = get_me(&server, &access_token).await;
     assert!(!me["verified"].as_bool().unwrap());
@@ -82,12 +82,7 @@ async fn get_me(server: &Server, access_token: &str) -> Value {
     serde_json::from_slice(&body).unwrap_or_default()
 }
 
-async fn test_login(
-    server: &Server,
-    email: &str,
-    password: &str,
-    user_id: &str,
-) -> (String, String) {
+async fn test_login(server: &Server, email: &str, password: &str) -> (String, String) {
     let (_, status) = server
         .post_json(
             "/login",
@@ -121,14 +116,12 @@ async fn test_login(
     assert_eq!(status, StatusCode::OK);
     let decoding_key = DecodingKey::from_rsa_pem(&pem).unwrap();
 
-    let token_data = jsonwebtoken::decode::<AccessTokenClaims>(
+    let _ = jsonwebtoken::decode::<AccessTokenClaims>(
         access_token,
         &decoding_key,
         &Validation::new(jsonwebtoken::Algorithm::RS256),
     )
     .unwrap();
-
-    assert_eq!(token_data.claims.sub.to_string(), user_id);
 
     (access_token.to_owned(), refresh_token.to_owned())
 }
