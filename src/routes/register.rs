@@ -6,6 +6,7 @@ use crate::db::redis::RedisPool;
 use crate::email::Emails;
 use crate::errors::AppResult;
 use crate::models::user::{CreateUser, NewUser};
+use crate::models::Session;
 use crate::rate_limit::{RateLimit, SlidingWindow};
 
 async fn handle_registration(
@@ -22,9 +23,13 @@ async fn handle_registration(
 
     let pg = pg.get()?;
 
-    let created_user = NewUser::new(&data)?.create(&pg, emails.as_ref())?;
+    let res = web::block(move || {
+        let user = NewUser::new(&data)?.create(&pg, emails.as_ref())?;
+        Session::create(&pg, user.id)
+    })
+    .await?;
 
-    Ok(HttpResponse::Created().json(created_user))
+    Ok(HttpResponse::Ok().json(res))
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {

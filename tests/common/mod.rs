@@ -95,14 +95,11 @@ impl Server {
             .await;
         assert_eq!(
             status,
-            StatusCode::CREATED,
+            StatusCode::OK,
             "failed to create user {} (did you clean your database?) {}",
             email,
             res
         );
-
-        let (res, status) = self.login_user(email, password).await;
-        assert_eq!(status, StatusCode::OK);
 
         TestUser::new(res["access_token"].as_str().unwrap().to_owned())
     }

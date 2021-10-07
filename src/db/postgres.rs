@@ -11,8 +11,6 @@ static MIGRATION_MUTEX: Lazy<Mutex<()>> = Lazy::new(Mutex::default);
 
 /// Create a database pool and run the necessary migrations.
 pub fn initialize_pg_pool(database_url: &str) -> PgPool {
-    let _shared = MIGRATION_MUTEX.lock().expect("failed to acquire lock");
-
     embed_migrations!();
 
     eprintln!("Connecting to Postgres");
@@ -20,6 +18,8 @@ pub fn initialize_pg_pool(database_url: &str) -> PgPool {
     let pool = r2d2::Pool::builder()
         .build(manager)
         .expect("failed to create pool");
+
+    let _shared = MIGRATION_MUTEX.lock().expect("failed to acquire lock");
 
     eprintln!("Running migrations");
     let conn = pool.get().expect("failed to get connection");

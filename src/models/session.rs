@@ -142,7 +142,7 @@ pub struct PubKeyRes {
 pub struct SessionInfo {
     pub id: SessionId,
     pub sub: UserId,
-    pub iat: DateTime<Utc>,
+    pub started: DateTime<Utc>,
     pub exp: DateTime<Utc>,
 }
 
