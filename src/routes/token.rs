@@ -26,7 +26,7 @@ async fn manage_token(
 
     let res: TokenResponse = match req {
         ManageTokenRequest::RefreshAccessToken { refresh_token } => {
-            let access_token = refresh_token.sign_access_token_simple(&conn)?;
+            let access_token = refresh_token.access_token_ez(&conn)?;
 
             TokenResponse {
                 access_token,

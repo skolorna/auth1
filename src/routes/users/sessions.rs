@@ -17,11 +17,12 @@ use crate::{
 async fn list_sessions(pool: web::Data<PgPool>, ident: Identity) -> AppResult<HttpResponse> {
     use crate::schema::sessions::columns;
     let conn = pool.get()?;
-    let res = web::block(move || {
+
+    let res: Vec<SessionInfo> = web::block(move || {
         Session::belonging_to(&ident.user)
             .select((columns::id, columns::sub, columns::started, columns::exp))
             .filter(Session::not_expired())
-            .load::<SessionInfo>(&conn)
+            .load(&conn)
     })
     .await?;
 
@@ -32,11 +33,12 @@ async fn list_sessions(pool: web::Data<PgPool>, ident: Identity) -> AppResult<Ht
 
 async fn clear_sessions(pool: web::Data<PgPool>, ident: Identity) -> AppResult<HttpResponse> {
     let conn = pool.get()?;
+
     let num_deleted =
         web::block(move || diesel::delete(Session::belonging_to(&ident.user)).execute(&conn))
             .await?;
 
-    Ok(HttpResponse::Ok().body(format!("deleted {} keys", num_deleted)))
+    Ok(HttpResponse::Ok().body(format!("deleted {} sessions", num_deleted)))
 }
 
 async fn delete_session(
@@ -45,6 +47,7 @@ async fn delete_session(
     web::Path(id): web::Path<SessionId>,
 ) -> AppResult<HttpResponse> {
     let conn = pool.get()?;
+
     let num_deleted = web::block(move || {
         diesel::delete(Session::belonging_to(&ident.user).filter(Session::with_id(id)))
             .execute(&conn)

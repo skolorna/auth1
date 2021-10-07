@@ -10,7 +10,7 @@ use crate::{
     models::{session::PubKeyRes, User},
     types::EmailAddress,
 };
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use diesel::prelude::*;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
@@ -50,6 +50,12 @@ pub struct AccessTokenClaims {
 
 impl AccessToken {
     pub const JWT_ALG: Algorithm = Algorithm::RS256;
+    /// TTL of all access tokens (as long as they don't outlive their refresh tokens) in seconds.
+    pub const TTL: i64 = 3600;
+
+    pub fn ttl() -> Duration {
+        Duration::seconds(Self::TTL)
+    }
 
     pub fn new<S: ToString>(s: S) -> Self {
         Self(s.to_string())
@@ -85,6 +91,43 @@ impl AccessToken {
         Ok(decoded.claims)
     }
 
+    pub fn sign(
+        key: EncodingKey,
+        sub: UserId,
+        session: SessionId,
+        max_exp: DateTime<Utc>,
+    ) -> AppResult<Self> {
+        let now = Utc::now();
+
+        let exp = (Utc::now() + Self::ttl()).min(max_exp);
+
+        if exp < now {
+            return Err(AppError::InternalError {
+                cause: "Cannot issue expired tokens".into(),
+            });
+        }
+
+        let header = Header {
+            typ: Some("JWT".into()),
+            alg: Self::JWT_ALG,
+            cty: None,
+            jku: None,
+            kid: Some(session.to_string()),
+            x5u: None,
+            x5t: None,
+        };
+
+        let claims = AccessTokenClaims {
+            sub,
+            exp: exp.timestamp(),
+        };
+
+        let token = jsonwebtoken::encode(&header, &claims, &key)
+            .map_err(|e| AppError::InternalError { cause: e.into() })?;
+
+        Ok(Self::new(token))
+    }
+
     fn jwt_error_opaque(err: jsonwebtoken::errors::Error) -> AppError {
         jwt_err_opaque!(err, AppError::InvalidAccessToken)
     }
@@ -106,7 +149,7 @@ impl VerificationToken {
         let exp = Utc::now() + Duration::hours(24);
         let header = Header::new(Self::JWT_ALG);
         let claims = VerificationTokenClaims {
-            email: user.email.to_owned(),
+            email: user.email.clone(),
             exp: exp.timestamp(),
         };
 

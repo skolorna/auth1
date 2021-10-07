@@ -89,6 +89,6 @@ impl From<Feedback> for PasswordFeedback {
 
 impl From<&Feedback> for PasswordFeedback {
     fn from(f: &Feedback) -> Self {
-        Self(f.to_owned())
+        Self(f.clone())
     }
 }

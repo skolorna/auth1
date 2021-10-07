@@ -30,7 +30,7 @@ pub struct User {
 
 #[non_exhaustive]
 #[derive(Debug, Deserialize)]
-pub struct CreateUser {
+pub struct RegisterUser {
     pub email: EmailAddress,
     pub password: String,
     pub full_name: PersonalName,
@@ -134,7 +134,7 @@ pub struct NewUser<'a> {
 }
 
 impl<'a> NewUser<'a> {
-    pub fn new(query: &'a CreateUser) -> AppResult<Self> {
+    pub fn new(query: &'a RegisterUser) -> AppResult<Self> {
         let hash = hash_password(&query.password)?;
 
         Ok(Self {

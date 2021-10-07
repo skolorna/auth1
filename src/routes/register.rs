@@ -5,7 +5,7 @@ use crate::db::postgres::PgPool;
 use crate::db::redis::RedisPool;
 use crate::email::Emails;
 use crate::errors::AppResult;
-use crate::models::user::{CreateUser, NewUser};
+use crate::models::user::{NewUser, RegisterUser};
 use crate::models::Session;
 use crate::rate_limit::{RateLimit, SlidingWindow};
 
@@ -13,7 +13,7 @@ async fn handle_registration(
     pg: web::Data<PgPool>,
     redis: web::Data<RedisPool>,
     emails: web::Data<Emails>,
-    web::Json(data): web::Json<CreateUser>,
+    web::Json(data): web::Json<RegisterUser>,
     client_info: ClientInfo,
 ) -> AppResult<HttpResponse> {
     const RATE_LIMIT: SlidingWindow = SlidingWindow::new("create_user", 3600, 100);

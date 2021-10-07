@@ -38,6 +38,7 @@ async fn resend_verification(
 
     web::block(move || {
         EMAIL_RATE_LIMIT.remaining_requests(&client_info.addr, &mut redis.get()?)?;
+
         let token = VerificationToken::generate(&ident.user)?;
         emails.send_user_confirmation(&ident.user, token)
     })
