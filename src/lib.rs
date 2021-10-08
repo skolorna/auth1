@@ -21,29 +21,12 @@ extern crate diesel;
 #[macro_use]
 extern crate diesel_migrations;
 
-use crate::errors::AppResult;
 use client_info::ClientInfoConfig;
-use crypto::verify_password;
 use db::{
-    postgres::{pg_pool_from_env, PgConn, PgPool},
+    postgres::{pg_pool_from_env, PgPool},
     redis::{redis_pool_from_env, RedisPool},
 };
 use email::Emails;
-use errors::AppError;
-use models::User;
-use types::EmailAddress;
-
-/// Login using email and password.
-pub fn login_with_password(conn: &PgConn, email: &EmailAddress, password: &str) -> AppResult<User> {
-    let user = match User::find_by_email(conn, email)? {
-        Some(user) => user,
-        None => return Err(AppError::InvalidEmailPassword),
-    };
-
-    verify_password(password, &user.hash())?;
-
-    Ok(user)
-}
 
 #[derive(Clone)]
 pub struct AppConfig {
