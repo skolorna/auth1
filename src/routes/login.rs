@@ -2,11 +2,11 @@ use actix_web::{web, HttpResponse};
 use serde::Deserialize;
 
 use crate::client_info::ClientInfo;
+use crate::crypto::verify_password;
 use crate::db::postgres::PgPool;
 use crate::db::redis::RedisPool;
-use crate::errors::AppResult;
-use crate::login_with_password;
-use crate::models::Session;
+use crate::errors::{AppError, AppResult};
+use crate::models::{Session, User};
 use crate::rate_limit::{RateLimit, SlidingWindow};
 use crate::types::EmailAddress;
 
@@ -29,7 +29,11 @@ async fn handle_login(
 
     let pg = pg.get()?;
     let res = web::block(move || {
-        let user = login_with_password(&pg, &credentials.email, &credentials.password)?;
+        let user =
+            User::find_by_email(&pg, &credentials.email)?.ok_or(AppError::InvalidEmailPassword)?;
+
+        verify_password(&credentials.password, &user.hash()?)?;
+
         Session::create(&pg, user.id)
     })
     .await?;

@@ -12,38 +12,20 @@ pub mod token;
 pub mod types;
 pub mod util;
 
-// Hopefully this makes Diesel work in Docker
-extern crate openssl;
-
 #[macro_use]
 extern crate diesel;
 
 #[macro_use]
 extern crate diesel_migrations;
 
-use crate::errors::AppResult;
+use std::fmt::Debug;
+
 use client_info::ClientInfoConfig;
-use crypto::verify_password;
 use db::{
-    postgres::{pg_pool_from_env, PgConn, PgPool},
+    postgres::{pg_pool_from_env, PgPool},
     redis::{redis_pool_from_env, RedisPool},
 };
 use email::Emails;
-use errors::AppError;
-use models::User;
-use types::EmailAddress;
-
-/// Login using email and password.
-pub fn login_with_password(conn: &PgConn, email: &EmailAddress, password: &str) -> AppResult<User> {
-    let user = match User::find_by_email(conn, email)? {
-        Some(user) => user,
-        None => return Err(AppError::InvalidEmailPassword),
-    };
-
-    verify_password(password, &user.hash())?;
-
-    Ok(user)
-}
 
 #[derive(Clone)]
 pub struct AppConfig {
@@ -64,15 +46,26 @@ impl AppConfig {
     }
 }
 
+impl Debug for AppConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppConfig")
+            .field("pg", &self.pg.state())
+            .field("redis", &self.redis)
+            .field("emails", &self.emails)
+            .field("client", &self.client)
+            .finish()
+    }
+}
+
 #[macro_export]
 macro_rules! create_app {
     ($config:expr) => {{
-        use actix_cors::Cors;
-        use actix_web::middleware::{normalize, Logger};
-        use actix_web::{web, App};
-        use auth1::errors::AppError;
+        use ::actix_cors::Cors;
+        use ::actix_web::middleware::{normalize, Logger};
+        use ::actix_web::{web, App};
+        use ::auth1::errors::AppError;
 
-        let auth1::AppConfig {
+        let ::auth1::AppConfig {
             pg,
             emails,
             redis,

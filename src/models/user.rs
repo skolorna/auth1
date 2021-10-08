@@ -30,7 +30,7 @@ pub struct User {
 
 #[non_exhaustive]
 #[derive(Debug, Deserialize)]
-pub struct CreateUser {
+pub struct RegisterUser {
     pub email: EmailAddress,
     pub password: String,
     pub full_name: PersonalName,
@@ -96,13 +96,15 @@ impl User {
         Ok(user)
     }
 
-    pub fn hash(&self) -> PasswordHash {
-        PasswordHash::new(&self.hash).expect("failed to parse hash")
+    pub fn hash(&self) -> AppResult<PasswordHash> {
+        PasswordHash::new(&self.hash).map_err(|e| AppError::InternalError {
+            cause: e.to_string().into(),
+        })
     }
 
     /// Update the user while verifying that the password is correct.
     pub fn update(&self, emails: &Emails, pg: &PgConn, update: UpdateUser) -> AppResult<Self> {
-        verify_password(&update.password, &self.hash())?;
+        verify_password(&update.password, &self.hash()?)?;
 
         let cs: UserChangeset = update.try_into()?;
 
@@ -134,7 +136,7 @@ pub struct NewUser<'a> {
 }
 
 impl<'a> NewUser<'a> {
-    pub fn new(query: &'a CreateUser) -> AppResult<Self> {
+    pub fn new(query: &'a RegisterUser) -> AppResult<Self> {
         let hash = hash_password(&query.password)?;
 
         Ok(Self {

@@ -4,19 +4,18 @@ use std::{fmt::Display, str::FromStr};
 
 use crate::{db::postgres::PgConn, diesel::QueryDsl};
 use base64::URL_SAFE_NO_PAD;
-use chrono::{DateTime, Duration, Utc};
 use diesel::prelude::*;
-use jsonwebtoken::{EncodingKey, Header};
+use jsonwebtoken::EncodingKey;
 use rand_core::{OsRng, RngCore};
 use serde::{de, Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
     errors::{AppError, AppResult},
-    models::{session::SessionId, user::UserId},
+    models::session::SessionId,
 };
 
-use super::{AccessToken, AccessTokenClaims};
+use super::AccessToken;
 
 type Secret = [u8; RefreshToken::SECRET_SIZE];
 
@@ -30,7 +29,7 @@ impl RefreshToken {
     const SECRET_SIZE: usize = 44;
     const MAX_B64_SIZE: usize = 4 * (Self::SECRET_SIZE + 2) / 3;
 
-    pub fn new(session: SessionId, secret: Secret) -> Self {
+    pub const fn new(session: SessionId, secret: Secret) -> Self {
         Self { session, secret }
     }
 
@@ -48,7 +47,6 @@ impl RefreshToken {
         Aes256Gcm::new(key)
     }
 
-    // FIXME
     fn aes_nonce(&self) -> &[u8] {
         &self.secret[32..]
     }
@@ -75,53 +73,38 @@ impl RefreshToken {
         Ok(plaintext)
     }
 
-    pub fn sign_access_token_simple(&self, conn: &PgConn) -> AppResult<AccessToken> {
+    /// Decrypt an encoding key.
+    ///
+    /// # Errors
+    /// Fails if the decryption fails, which most likely is due to incorrect
+    /// credentials.
+    pub fn encoding_key(
+        &self,
+        ciphertext_private_key: &[u8],
+    ) -> Result<EncodingKey, aes_gcm::Error> {
+        let der = self.decrypt(ciphertext_private_key)?;
+
+        Ok(EncodingKey::from_rsa_der(&der))
+    }
+
+    /// Sign an access token by querying the encrypted private key, decrypting it
+    /// with the stored secret and finally signing the access token for the user
+    /// associated with the session.
+    pub fn access_token_ez(&self, conn: &PgConn) -> AppResult<AccessToken> {
         use crate::schema::sessions::{columns, table};
 
-        let (exp, private_key, sub): (_, Vec<u8>, UserId) = table
+        let (exp, private_key, sub): (_, Vec<u8>, _) = table
             .select((columns::exp, columns::private_key, columns::sub))
             .find(self.session)
             .first(conn)?;
 
-        self.sign_access_token(private_key, sub, exp)
-    }
-
-    pub fn sign_access_token(
-        &self,
-        private_key: Vec<u8>,
-        sub: UserId,
-        max_exp: DateTime<Utc>,
-    ) -> AppResult<AccessToken> {
-        let now = Utc::now();
-        // The access token must not outlive the refresh token
-        let exp = (now + Duration::hours(1)).min(max_exp);
-
-        if exp < now {
-            return Err(AppError::InvalidRefreshToken);
-        }
-
-        let der = self
-            .decrypt(&private_key)
-            .map_err(|_| AppError::InvalidRefreshToken)?;
-
-        let encoding_key = EncodingKey::from_rsa_der(&der);
-        let header = Header {
-            typ: Some("JWT".into()),
-            alg: AccessToken::JWT_ALG,
-            cty: None,
-            jku: None,
-            kid: Some(self.session.to_string()),
-            x5u: None,
-            x5t: None,
-        };
-        let claims = AccessTokenClaims {
+        AccessToken::sign(
+            self.encoding_key(&private_key)
+                .map_err(|_| AppError::InvalidRefreshToken)?,
             sub,
-            exp: exp.timestamp(),
-        };
-
-        let token = jsonwebtoken::encode(&header, &claims, &encoding_key).expect("hm");
-
-        Ok(AccessToken::new(token))
+            self.session,
+            exp,
+        )
     }
 }
 

@@ -57,8 +57,7 @@ impl FromRequest for ClientInfo {
                 .to_owned()
         } else {
             req.peer_addr()
-                .map(|s| s.ip())
-                .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
+                .map_or(IpAddr::V4(Ipv4Addr::LOCALHOST), |s| s.ip())
                 .to_string()
         };
 

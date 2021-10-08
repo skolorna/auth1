@@ -1,7 +1,4 @@
-use std::{
-    ops::DerefMut,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use r2d2_redis::redis;
 
@@ -30,7 +27,7 @@ impl SlidingWindow {
         }
     }
 
-    fn window_id(&self, ts: Duration) -> u64 {
+    const fn window_id(&self, ts: Duration) -> u64 {
         ts.as_secs() / self.window_secs
     }
 
@@ -56,7 +53,7 @@ impl SlidingWindow {
             .incr(&current_key, 1)
             .expire(&current_key, (self.window_secs * 2) as usize)
             .ignore()
-            .query(conn.deref_mut())?;
+            .query(&mut **conn)?;
 
         Ok(self.count(previous_count, current_count, now))
     }

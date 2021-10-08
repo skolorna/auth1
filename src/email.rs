@@ -10,6 +10,7 @@ use lettre::{
     transport::smtp::authentication::{Credentials, Mechanism},
     FileTransport, Message, SmtpTransport, Transport,
 };
+use tracing::warn;
 
 use crate::{
     errors::{AppError, AppResult},
@@ -18,7 +19,7 @@ use crate::{
     token::VerificationToken,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Emails {
     backend: EmailBackend,
     from: Mailbox,
@@ -29,7 +30,7 @@ impl Emails {
     pub fn from_env() -> Self {
         let backend = match (
             env::var("SMTP_HOST"),
-            env::var("SMTP_PASSWORD"),
+            env::var("SMTP_USERNAME"),
             env::var("SMTP_PASSWORD"),
         ) {
             (Ok(host), Ok(username), Ok(password)) => EmailBackend::Smtp {
@@ -37,9 +38,13 @@ impl Emails {
                 username,
                 password,
             },
-            _ => EmailBackend::FileSystem {
-                path: "/tmp".parse().unwrap(),
-            },
+            _ => {
+                warn!("some smtp options are not set; falling back to file backend for email");
+
+                EmailBackend::FileSystem {
+                    path: "/tmp".parse().unwrap(),
+                }
+            }
         };
 
         Self {
@@ -126,6 +131,16 @@ impl Emails {
         }
 
         Ok(())
+    }
+}
+
+impl Debug for Emails {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Emails")
+            .field("backend", &self.backend)
+            .field("from", &self.from.to_string())
+            .field("reply_to", &self.reply_to.as_ref().map(|m| m.to_string()))
+            .finish()
     }
 }
 

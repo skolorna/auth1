@@ -5,6 +5,7 @@ use diesel::{
     prelude::*,
     sql_types::{self, Timestamptz},
 };
+use jsonwebtoken::EncodingKey;
 use openssl::{error::ErrorStack, rsa::Rsa};
 use serde::Serialize;
 use uuid::Uuid;
@@ -14,12 +15,9 @@ use crate::{
     db::postgres::PgConn,
     errors::{AppError, AppResult},
     schema::sessions,
-    token::{refresh_token::RefreshToken, TokenResponse},
+    token::{refresh_token::RefreshToken, AccessToken, TokenResponse},
 };
 
-/// FIXME: In the future, it's probably better to use some sort of clock-based uuid generation:
-/// otherwise, albeit extremely unlikely, cache poisoning can occur if one session with id `a`
-/// is deleted followed by a new session with the same id `a` being created.
 pub type SessionId = Uuid;
 
 /// A session contains asymmetric keys used for issuing shorter-lived access tokens.
@@ -46,10 +44,12 @@ fn map_rsa_err(err: ErrorStack) -> AppError {
 impl Session {
     pub const RSA_BITS: u32 = 2048;
 
+    #[must_use]
     pub fn not_expired() -> NotExpired {
         sessions::columns::exp.gt(Utc::now())
     }
 
+    #[must_use]
     pub fn with_id(id: SessionId) -> WithId {
         sessions::columns::id.eq(id)
     }
@@ -72,8 +72,8 @@ impl Session {
         let new_session = NewSession {
             id,
             sub,
-            started: now,
-            exp: now + Duration::days(90),
+            started: &now,
+            exp: &(now + Duration::days(90)),
             public_key: &public_pem,
             private_key: &refresh_token.encrypt(&private_der).map_err(|e| {
                 AppError::InternalError {
@@ -88,9 +88,10 @@ impl Session {
 
         Ok(TokenResponse {
             refresh_token: Some(refresh_token),
-            access_token: refresh_token.sign_access_token(
-                session.private_key,
-                session.sub,
+            access_token: AccessToken::sign(
+                EncodingKey::from_rsa_der(&private_der),
+                sub,
+                session.id,
                 session.exp,
             )?,
         })
@@ -153,6 +154,6 @@ struct NewSession<'a> {
     sub: UserId,
     public_key: &'a [u8],
     private_key: &'a [u8],
-    started: DateTime<Utc>,
-    exp: DateTime<Utc>,
+    started: &'a DateTime<Utc>,
+    exp: &'a DateTime<Utc>,
 }
