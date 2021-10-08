@@ -14,6 +14,7 @@ auth1 is an auth system.
 | email      | string   | email address of the user           |
 | verified   | boolean  | whether the email has been verified |
 | created_at | datetime | account creation timestamp          |
+| full_name  | string   | full name of the user               |
 
 ### Get Current User
 
@@ -21,12 +22,34 @@ auth1 is an auth system.
 
 Get detailed information about the currently logged-in user.
 
-### Create User
+### Register
 
-`POST /users`
+`POST /register`
 
-Create a user with the specified email address and password. If successful, a welcome email
-with instructions for email verification will be delivered to the user's inbox.
+Create a user with the specified name, email address, and password. If successful, a welcome email with instructions for email verification will be delivered to the user's inbox.
+
+#### JSON Parameters
+
+| Field     | Type   | Description   |
+| --------- | ------ | ------------- |
+| email     | string | email address |
+| password  | string | password      |
+| full_name | string | full name     |
+
+#### Example
+
+```json
+{
+  "access_token": "ey....",
+  "refresh_token": "GEYEt4+ILoMKS5XE3GX+bKX5S0pD05TF"
+}
+```
+
+### Login
+
+`POST /login`
+
+Login with the specified email and password.
 
 #### JSON Parameters
 
@@ -34,3 +57,26 @@ with instructions for email verification will be delivered to the user's inbox.
 | -------- | ------ | ------------- |
 | email    | string | email address |
 | password | string | password      |
+
+#### Example
+
+```json
+{
+  "access_token": "ey....",
+  "refresh_token": "lq7il5GEjkNoLsqjAT+Bo/mzImoQZxoZ"
+}
+```
+
+## Token managment
+
+### Refreshing an access token
+
+`POST /token`
+
+#### Example
+
+```json
+{
+  "access_token": "ey...."
+}
+```
