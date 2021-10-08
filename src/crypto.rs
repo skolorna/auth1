@@ -92,3 +92,27 @@ impl From<&Feedback> for PasswordFeedback {
         Self(f.clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use zxcvbn::zxcvbn;
+
+    use super::*;
+
+    #[test]
+    fn display_feedback() {
+        let feedback: PasswordFeedback = zxcvbn("abc123", &[])
+            .unwrap()
+            .feedback()
+            .as_ref()
+            .unwrap()
+            .into();
+
+        assert_eq!(
+            feedback.to_string(),
+            "This is similar to a commonly used password.\n\
+                Add another word or two. Uncommon words are better.\n\
+                Reversed words aren't much harder to guess.\n"
+        );
+    }
+}
