@@ -12,14 +12,13 @@ pub mod token;
 pub mod types;
 pub mod util;
 
-// Hopefully this makes Diesel work in Docker
-extern crate openssl;
-
 #[macro_use]
 extern crate diesel;
 
 #[macro_use]
 extern crate diesel_migrations;
+
+use std::fmt::Debug;
 
 use client_info::ClientInfoConfig;
 use db::{
@@ -47,15 +46,26 @@ impl AppConfig {
     }
 }
 
+impl Debug for AppConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppConfig")
+            .field("pg", &self.pg.state())
+            .field("redis", &self.redis)
+            .field("emails", &self.emails)
+            .field("client", &self.client)
+            .finish()
+    }
+}
+
 #[macro_export]
 macro_rules! create_app {
     ($config:expr) => {{
-        use actix_cors::Cors;
-        use actix_web::middleware::{normalize, Logger};
-        use actix_web::{web, App};
-        use auth1::errors::AppError;
+        use ::actix_cors::Cors;
+        use ::actix_web::middleware::{normalize, Logger};
+        use ::actix_web::{web, App};
+        use ::auth1::errors::AppError;
 
-        let auth1::AppConfig {
+        let ::auth1::AppConfig {
             pg,
             emails,
             redis,
