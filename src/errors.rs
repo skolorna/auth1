@@ -7,6 +7,7 @@ use actix_web::{
 use chrono::{DateTime, Utc};
 use r2d2_redis::redis::RedisError;
 use serde::Serialize;
+use tracing::log::warn;
 use zxcvbn::ZxcvbnError;
 
 use crate::crypto::PasswordFeedback;
@@ -25,7 +26,6 @@ pub enum AppError {
     InvalidAccessToken,
     BadRequest(Option<String>),
     MissingAccessToken,
-    InvalidRefreshToken,
     InvalidVerificationToken,
     JsonError(serde_json::Error),
     PayloadTooLarge,
@@ -45,7 +45,6 @@ impl ResponseError for AppError {
             AppError::InvalidAccessToken => StatusCode::FORBIDDEN,
             AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
             AppError::MissingAccessToken => StatusCode::UNAUTHORIZED,
-            AppError::InvalidRefreshToken => StatusCode::BAD_REQUEST,
             AppError::InvalidVerificationToken => StatusCode::BAD_REQUEST,
             AppError::JsonError(_) => StatusCode::BAD_REQUEST,
             AppError::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
@@ -55,6 +54,11 @@ impl ResponseError for AppError {
 
     fn error_response(&self) -> HttpResponse {
         let mut res = HttpResponseBuilder::new(self.status_code());
+
+        if let AppError::InternalError { cause } = self {
+            // For debugging purpouses, it can be quite helpful to log internal errors.
+            warn!("{}", cause);
+        }
 
         res.json(ErrorJson::from(self))
     }
@@ -71,7 +75,6 @@ impl AppError {
             AppError::InvalidAccessToken => "invalid_access_token",
             AppError::BadRequest(_) => "bad_request",
             AppError::MissingAccessToken => "missing_access_token",
-            AppError::InvalidRefreshToken => "invalid_refresh_token",
             AppError::InvalidVerificationToken => "invalid_verification_token",
             AppError::JsonError(_) => "invalid_body",
             AppError::PayloadTooLarge => "too_large",
@@ -94,9 +97,6 @@ impl Display for AppError {
                 None => write!(f, "Bad request."),
             },
             AppError::MissingAccessToken => write!(f, "Access token is missing."),
-            AppError::InvalidRefreshToken => {
-                write!(f, "Invalid refresh token. Maybe it has expired?")
-            }
             AppError::InvalidVerificationToken => write!(f, "The verification token is invalid."),
             AppError::JsonError(e) => e.fmt(f),
             AppError::PayloadTooLarge => write!(f, "Payload too large"),

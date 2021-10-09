@@ -1,5 +1,3 @@
-pub mod sessions;
-
 use actix_web::{
     http::header::{CacheControl, CacheDirective},
     web, HttpResponse,
@@ -32,6 +30,5 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         web::resource("/@me")
             .route(web::get().to(get_me))
             .route(web::patch().to(patch_me)),
-    )
-    .service(web::scope("/@me/sessions").configure(sessions::configure));
+    );
 }
