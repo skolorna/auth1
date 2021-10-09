@@ -75,7 +75,8 @@ macro_rules! create_app {
         let cors = Cors::default()
             .allowed_origin("http://localhost:3000")
             .allow_any_method()
-            .allow_any_header();
+            .allow_any_header()
+            .max_age(600);
 
         App::new()
             .data(pg)
