@@ -58,13 +58,11 @@ impl Keypair {
                 return Ok(keypair);
             }
 
-            let id = Uuid::new_v4();
-
             let rsa = Rsa::generate(Self::RSA_BITS).map_err(map_rsa_err)?;
 
             let new = NewKeypair {
-                id,
-                public: &rsa.public_key_to_der().map_err(map_rsa_err)?,
+                id: Uuid::new_v4(),
+                public: &rsa.public_key_to_der_pkcs1().map_err(map_rsa_err)?,
                 private: &rsa.private_key_to_der().map_err(map_rsa_err)?,
             };
 

@@ -22,7 +22,7 @@ async fn list_keys(pg: web::Data<PgPool>) -> AppResult<HttpResponse> {
     let res: Result<Vec<JsonWebKey>, openssl::error::ErrorStack> = data
         .into_iter()
         .map(|(id, der)| {
-            let rsa = Rsa::public_key_from_der(&der)?;
+            let rsa = Rsa::public_key_from_der_pkcs1(&der)?;
 
             let mut jwk = JsonWebKey::new(Key::RSA {
                 public: RsaPublic {

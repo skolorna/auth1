@@ -76,9 +76,9 @@ impl AccessToken {
             .filter(Keypair::valid_for_verifying())
             .find(kid)
             .first(conn)?;
-        let key = DecodingKey::from_rsa_der(&key);
 
-        dbg!(&key);
+        // The proper encoding can be obtained by RsaKey::public_key_to_der_pkcs1.
+        let key = DecodingKey::from_rsa_der(&key);
 
         let validation = Validation::new(Self::JWT_ALG);
         let decoded = jsonwebtoken::decode::<AccessTokenClaims>(&self.0, &key, &validation)
