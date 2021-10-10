@@ -1,5 +1,5 @@
-pub mod session;
+pub mod keypair;
 pub mod user;
 
-pub use session::Session;
+pub use keypair::Keypair;
 pub use user::User;

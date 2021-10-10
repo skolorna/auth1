@@ -1,11 +1,9 @@
 table! {
-    sessions (id) {
+    keypairs (id) {
         id -> Uuid,
-        sub -> Uuid,
-        public_key -> Bytea,
-        private_key -> Bytea,
-        started -> Timestamptz,
-        exp -> Timestamptz,
+        public -> Bytea,
+        private -> Bytea,
+        created_at -> Timestamptz,
     }
 }
 
@@ -20,6 +18,4 @@ table! {
     }
 }
 
-joinable!(sessions -> users (sub));
-
-allow_tables_to_appear_in_same_query!(sessions, users,);
+allow_tables_to_appear_in_same_query!(keypairs, users,);

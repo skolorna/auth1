@@ -1,30 +1,28 @@
-//! Everything tokens: access tokens, refresh tokens and even verification tokens!
-pub mod refresh_token;
-
 use std::fmt::Display;
 
 use crate::{
     db::postgres::PgConn,
     diesel::QueryDsl,
     errors::AppError,
-    models::{session::PubKeyRes, User},
+    models::{Keypair, User},
     types::EmailAddress,
 };
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use diesel::prelude::*;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     errors::AppResult,
-    models::{session::SessionId, user::UserId, Session},
+    models::{keypair::KeypairId, user::UserId},
 };
-
-use self::refresh_token::RefreshToken;
 
 macro_rules! jwt_err_opaque {
     ($err:expr, $out:expr) => {{
         use ::jsonwebtoken::errors::ErrorKind::*;
+        use ::tracing::warn;
+
+        warn!("{}", $err);
 
         match $err.kind() {
             InvalidToken | InvalidSignature | ExpiredSignature | InvalidIssuer
@@ -50,11 +48,9 @@ pub struct AccessTokenClaims {
 
 impl AccessToken {
     pub const JWT_ALG: Algorithm = Algorithm::RS256;
-    /// TTL of all access tokens (as long as they don't outlive their refresh tokens) in seconds.
-    pub const TTL: i64 = 3600;
 
     pub fn ttl() -> Duration {
-        Duration::seconds(Self::TTL)
+        Duration::days(30)
     }
 
     pub fn new<S: ToString>(s: S) -> Self {
@@ -63,56 +59,48 @@ impl AccessToken {
 
     /// Verify and decode a JWT.
     pub fn verify_and_decode(&self, conn: &PgConn) -> AppResult<AccessTokenClaims> {
+        use crate::schema::keypairs::{columns, table};
+
         let header = jsonwebtoken::decode_header(&self.0).map_err(Self::jwt_error_opaque)?;
 
-        let kid: SessionId = header
+        let kid: KeypairId = header
             .kid
             .ok_or(AppError::InvalidAccessToken)?
             .parse()
             .map_err(|_| AppError::InvalidAccessToken)?;
 
-        let PubKeyRes {
-            pubkey,
-            sub: key_owner,
-            ..
-        } = Session::get_pubkey(conn, kid)?.ok_or(AppError::InvalidAccessToken)?;
+        dbg!(kid);
 
-        let key = DecodingKey::from_rsa_pem(&pubkey).map_err(Self::jwt_error_opaque)?;
+        let key: Vec<u8> = table
+            .select(columns::public)
+            .filter(Keypair::valid_for_verifying())
+            .find(kid)
+            .first(conn)?;
+
+        // The proper encoding can be obtained by RsaKey::public_key_to_der_pkcs1.
+        let key = DecodingKey::from_rsa_der(&key);
 
         let validation = Validation::new(Self::JWT_ALG);
         let decoded = jsonwebtoken::decode::<AccessTokenClaims>(&self.0, &key, &validation)
             .map_err(Self::jwt_error_opaque)?;
 
-        if key_owner != decoded.claims.sub {
-            // Something fishy is going on.
-            return Err(AppError::InvalidAccessToken);
-        }
+        dbg!("decoded");
 
         Ok(decoded.claims)
     }
 
-    pub fn sign(
-        key: EncodingKey,
-        sub: UserId,
-        session: SessionId,
-        max_exp: DateTime<Utc>,
-    ) -> AppResult<Self> {
+    pub fn sign(pg: &PgConn, sub: UserId) -> AppResult<Self> {
+        let keypair = Keypair::for_signing(pg)?;
+
         let now = Utc::now();
-
-        let exp = (Utc::now() + Self::ttl()).min(max_exp);
-
-        if exp < now {
-            return Err(AppError::InternalError {
-                cause: "Cannot issue expired tokens".into(),
-            });
-        }
+        let exp = now + Self::ttl();
 
         let header = Header {
             typ: Some("JWT".into()),
             alg: Self::JWT_ALG,
             cty: None,
             jku: None,
-            kid: Some(session.to_string()),
+            kid: Some(keypair.id.to_string()),
             x5u: None,
             x5t: None,
         };
@@ -122,7 +110,7 @@ impl AccessToken {
             exp: exp.timestamp(),
         };
 
-        let token = jsonwebtoken::encode(&header, &claims, &key)
+        let token = jsonwebtoken::encode(&header, &claims, &keypair.jwt_enc())
             .map_err(|e| AppError::InternalError { cause: e.into() })?;
 
         Ok(Self::new(token))
@@ -208,5 +196,4 @@ pub struct VerificationTokenClaims {
 #[derive(Debug, Serialize)]
 pub struct TokenResponse {
     pub access_token: AccessToken,
-    pub refresh_token: Option<RefreshToken>,
 }

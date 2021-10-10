@@ -1,8 +1,10 @@
 mod email;
-mod sessions;
 mod update;
 
-use actix_web::{http::StatusCode, test};
+use actix_web::{
+    http::StatusCode,
+    test::{self, TestRequest},
+};
 use auth1::{create_app, email::StoredEmail, token::AccessTokenClaims};
 use jsonwebtoken::{DecodingKey, Validation};
 use regex::Regex;
@@ -44,7 +46,7 @@ async fn create_user_and_login() {
         .await;
     assert_eq!(status, StatusCode::CONFLICT);
 
-    let (access_token, refresh_token) = test_login(&server, "user1@example.com", "d0ntpwnm3").await;
+    let access_token = test_login(&server, "user1@example.com", "d0ntpwnm3").await;
 
     let me = get_me(&server, &access_token).await;
     assert!(!me["verified"].as_bool().unwrap());
@@ -54,17 +56,7 @@ async fn create_user_and_login() {
     let me = get_me(&server, &access_token).await;
     assert!(me["verified"].as_bool().unwrap());
 
-    let (res, status) = server
-        .post_json(
-            "/token",
-            json!({
-                "refresh_token": refresh_token,
-            }),
-        )
-        .await;
-    assert_eq!(status, StatusCode::OK);
-
-    let me = get_me(&server, res["access_token"].as_str().unwrap()).await;
+    let me = get_me(&server, &access_token).await;
     assert_eq!(me["email"], json!("user1@example.com"));
 }
 
@@ -82,7 +74,7 @@ async fn get_me(server: &Server, access_token: &str) -> Value {
     serde_json::from_slice(&body).unwrap_or_default()
 }
 
-async fn test_login(server: &Server, email: &str, password: &str) -> (String, String) {
+async fn test_login(server: &Server, email: &str, password: &str) -> String {
     let (_, status) = server
         .post_json(
             "/login",
@@ -105,16 +97,22 @@ async fn test_login(server: &Server, email: &str, password: &str) -> (String, St
         .await;
     assert_eq!(status, StatusCode::OK);
 
-    let refresh_token = res["refresh_token"].as_str().unwrap();
     let access_token = res["access_token"].as_str().unwrap();
     let key_id = jsonwebtoken::decode_header(access_token)
         .unwrap()
         .kid
         .unwrap();
 
-    let (pem, status) = server.get(format!("/keys/{}", key_id)).await;
+    let (keys, status) = server.send_json(TestRequest::with_uri("/keys")).await;
     assert_eq!(status, StatusCode::OK);
-    let decoding_key = DecodingKey::from_rsa_pem(&pem).unwrap();
+    let jwks = keys["keys"].as_array().unwrap();
+    let jwk = jwks
+        .into_iter()
+        .find(|v| v.as_object().unwrap()["kid"].as_str().unwrap() == key_id)
+        .unwrap();
+
+    let decoding_key =
+        DecodingKey::from_rsa_components(jwk["n"].as_str().unwrap(), jwk["e"].as_str().unwrap());
 
     let _ = jsonwebtoken::decode::<AccessTokenClaims>(
         access_token,
@@ -123,7 +121,7 @@ async fn test_login(server: &Server, email: &str, password: &str) -> (String, St
     )
     .unwrap();
 
-    (access_token.to_owned(), refresh_token.to_owned())
+    access_token.to_owned()
 }
 
 async fn test_verify_email(server: &Server, email: &str) {
