@@ -5,5 +5,6 @@ CREATE TABLE users (
   verified BOOLEAN NOT NULL DEFAULT FALSE,
   hash TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  full_name TEXT NOT NULL
+  full_name TEXT NOT NULL,
+  jwt_secret BYTEA NOT NULL
 );

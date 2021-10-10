@@ -71,17 +71,6 @@ impl Server {
         (response, status_code)
     }
 
-    pub async fn get(&self, url: impl AsRef<str>) -> (Vec<u8>, StatusCode) {
-        let mut app = test::init_service(create_app!(self.0.clone())).await;
-
-        let req = test::TestRequest::get().uri(url.as_ref()).to_request();
-        let res = test::call_service(&mut app, req).await;
-        let status_code = res.status();
-        let body = test::read_body(res).await;
-
-        (body.to_vec(), status_code)
-    }
-
     pub async fn create_user(&self, full_name: &str, email: &str, password: &str) -> TestUser {
         let (res, status) = self
             .post_json(
@@ -101,7 +90,10 @@ impl Server {
             res
         );
 
-        TestUser::new(res["access_token"].as_str().unwrap().to_owned())
+        let access_token = res["access_token"].as_str().unwrap().to_string();
+        let refresh_token = res["refresh_token"].as_str().map(|s| s.to_owned());
+
+        TestUser::new(access_token, refresh_token)
     }
 
     pub async fn login_user(&self, email: &str, password: &str) -> (Value, StatusCode) {

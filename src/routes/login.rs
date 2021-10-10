@@ -6,7 +6,7 @@ use crate::crypto::verify_password;
 use crate::db::postgres::PgPool;
 use crate::db::redis::RedisPool;
 use crate::errors::{AppError, AppResult};
-use crate::models::{Session, User};
+use crate::models::User;
 use crate::rate_limit::{RateLimit, SlidingWindow};
 use crate::types::EmailAddress;
 
@@ -34,7 +34,7 @@ async fn handle_login(
 
         verify_password(&credentials.password, &user.hash()?)?;
 
-        Session::create(&pg, user.id)
+        user.get_tokens(&pg)
     })
     .await?;
 

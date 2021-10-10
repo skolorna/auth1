@@ -1,35 +1,34 @@
 use actix_web::{web, HttpResponse};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::{
     db::postgres::PgPool,
     errors::AppResult,
-    token::{refresh_token::RefreshToken, AccessToken, TokenResponse},
+    models::Keypair,
+    token::{access_token, refresh_token, TokenResponse},
 };
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum ManageTokenRequest {
-    RefreshAccessToken { refresh_token: RefreshToken },
-}
-
-#[derive(Debug, Serialize)]
-struct RefreshAccessTokenResponse {
-    access_token: AccessToken,
+    RefreshAccessToken { refresh_token: String },
 }
 
 async fn manage_token(
     pool: web::Data<PgPool>,
     web::Json(req): web::Json<ManageTokenRequest>,
 ) -> AppResult<HttpResponse> {
-    let conn = pool.get()?;
+    let pg = pool.get()?;
 
     let res: TokenResponse = match req {
-        ManageTokenRequest::RefreshAccessToken { refresh_token } => {
-            let access_token = refresh_token.access_token_ez(&conn)?;
+        ManageTokenRequest::RefreshAccessToken {
+            refresh_token: data,
+        } => {
+            let claims = refresh_token::decode(&pg, &data)?;
+            let keypair = Keypair::for_signing(&pg)?;
 
             TokenResponse {
-                access_token,
+                access_token: access_token::sign(&keypair, claims.sub)?,
                 refresh_token: None,
             }
         }

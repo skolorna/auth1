@@ -5,15 +5,18 @@ use crate::db::postgres::PgConn;
 use crate::email::Emails;
 use crate::errors::{AppError, AppResult};
 use crate::schema::users;
-use crate::token::VerificationToken;
+use crate::token::{access_token, refresh_token, TokenResponse, VerificationToken};
 use crate::types::{EmailAddress, PersonalName};
 
 use chrono::{DateTime, Utc};
 use diesel::{insert_into, prelude::*};
 use lettre::message::Mailbox;
 use pbkdf2::password_hash::PasswordHash;
+use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use super::Keypair;
 
 pub type UserId = Uuid;
 
@@ -26,6 +29,7 @@ pub struct User {
     pub hash: String,
     pub created_at: DateTime<Utc>,
     pub full_name: PersonalName,
+    pub jwt_secret: Vec<u8>,
 }
 
 #[non_exhaustive]
@@ -121,6 +125,18 @@ impl User {
         Ok(result)
     }
 
+    pub fn get_tokens(&self, pg: &PgConn) -> AppResult<TokenResponse> {
+        let keypair = Keypair::for_signing(pg)?;
+
+        let access_token = access_token::sign(&keypair, self.id)?;
+        let refresh_token = refresh_token::sign(self.id, &self.jwt_secret)?;
+
+        AppResult::Ok(TokenResponse {
+            access_token,
+            refresh_token: Some(refresh_token),
+        })
+    }
+
     pub fn mailbox(&self) -> Mailbox {
         Mailbox::new(Some(self.full_name.to_string()), self.email.clone().into())
     }
@@ -133,17 +149,21 @@ pub struct NewUser<'a> {
     pub email: &'a EmailAddress,
     pub hash: String,
     pub full_name: &'a str,
+    pub jwt_secret: Vec<u8>,
 }
 
 impl<'a> NewUser<'a> {
     pub fn new(query: &'a RegisterUser) -> AppResult<Self> {
         let hash = hash_password(&query.password)?;
+        let mut jwt_secret = [0; refresh_token::SECRET_SIZE];
+        OsRng.fill_bytes(&mut jwt_secret);
 
         Ok(Self {
             id: Uuid::new_v4(),
             email: &query.email,
             hash,
             full_name: query.full_name.as_str(),
+            jwt_secret: jwt_secret.to_vec(),
         })
     }
 
@@ -181,6 +201,7 @@ impl From<User> for JsonUser {
             created_at,
             full_name,
             hash: _,
+            jwt_secret: _,
         }: User,
     ) -> Self {
         Self {
@@ -225,6 +246,7 @@ mod tests {
             verified: true,
             hash: "quite secret; do not share".into(),
             full_name: "Jay Gatsby".parse().unwrap(),
+            jwt_secret: vec![1, 2, 3, 4],
         };
 
         let serialized = serde_json::to_value(&user).unwrap();
