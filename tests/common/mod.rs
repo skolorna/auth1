@@ -90,7 +90,10 @@ impl Server {
             res
         );
 
-        TestUser::new(res["access_token"].as_str().unwrap().to_owned())
+        let access_token = res["access_token"].as_str().unwrap().to_string();
+        let refresh_token = res["refresh_token"].as_str().map(|s| s.to_owned());
+
+        TestUser::new(access_token, refresh_token)
     }
 
     pub async fn login_user(&self, email: &str, password: &str) -> (Value, StatusCode) {

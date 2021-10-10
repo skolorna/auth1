@@ -7,7 +7,6 @@ use crate::email::Emails;
 use crate::errors::AppResult;
 use crate::models::user::{NewUser, RegisterUser};
 use crate::rate_limit::{RateLimit, SlidingWindow};
-use crate::token::{AccessToken, TokenResponse};
 
 async fn handle_registration(
     pg: web::Data<PgPool>,
@@ -26,7 +25,7 @@ async fn handle_registration(
     let res = web::block(move || {
         let user = NewUser::new(&data)?.create(&pg, emails.as_ref())?;
 
-        AccessToken::sign(&pg, user.id).map(|access_token| TokenResponse { access_token })
+        user.get_tokens(&pg)
     })
     .await?;
 

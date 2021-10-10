@@ -32,6 +32,7 @@ pub enum AppError {
     WeakPassword {
         feedback: Option<PasswordFeedback>,
     },
+    InvalidRefreshToken,
 }
 
 impl ResponseError for AppError {
@@ -49,6 +50,7 @@ impl ResponseError for AppError {
             AppError::JsonError(_) => StatusCode::BAD_REQUEST,
             AppError::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             AppError::WeakPassword { .. } => StatusCode::BAD_REQUEST,
+            AppError::InvalidRefreshToken => StatusCode::BAD_REQUEST,
         }
     }
 
@@ -79,6 +81,7 @@ impl AppError {
             AppError::JsonError(_) => "invalid_body",
             AppError::PayloadTooLarge => "too_large",
             AppError::WeakPassword { .. } => "weak_password",
+            AppError::InvalidRefreshToken => "invalid_refresh_token",
         }
     }
 }
@@ -104,6 +107,7 @@ impl Display for AppError {
                 Some(feedback) => write!(f, "{}", feedback),
                 _ => write!(f, "Password is too weak."),
             },
+            AppError::InvalidRefreshToken => write!(f, "Invalid refresh token."),
         }
     }
 }
@@ -198,6 +202,24 @@ impl From<&AppError> for ErrorJson {
 }
 
 pub type AppResult<T> = Result<T, AppError>;
+
+/// Make all server-related JWT errors opaque to the client.
+macro_rules! jwt_err_opaque {
+    ($err:expr, $out:expr) => {{
+        use ::jsonwebtoken::errors::ErrorKind::*;
+        use ::tracing::warn;
+
+        warn!("{}", $err);
+
+        match $err.kind() {
+            InvalidToken | InvalidSignature | ExpiredSignature | InvalidIssuer
+            | InvalidAudience | InvalidSubject | ImmatureSignature | InvalidAlgorithm
+            | Base64(_) | Json(_) | Utf8(_) => $out,
+            InvalidEcdsaKey | InvalidRsaKey | InvalidAlgorithmName | InvalidKeyFormat
+            | Crypto(_) | __Nonexhaustive => AppError::InternalError { cause: $err.into() },
+        }
+    }};
+}
 
 #[cfg(test)]
 mod tests {

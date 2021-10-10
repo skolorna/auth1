@@ -9,7 +9,7 @@ use crate::{
     db::postgres::PgConn,
     errors::{AppError, AppResult},
     schema::keypairs,
-    token::AccessToken,
+    token::access_token,
 };
 
 pub type KeypairId = Uuid;
@@ -33,7 +33,7 @@ impl Keypair {
     pub const RSA_BITS: u32 = 2048;
 
     pub fn ttl() -> Duration {
-        Duration::days(90)
+        Duration::seconds(86400)
     }
 
     pub fn valid_for_signing() -> ValidForSig {
@@ -41,7 +41,8 @@ impl Keypair {
     }
 
     pub fn valid_for_verifying() -> ValidForVer {
-        keypairs::columns::created_at.gt(Utc::now() - Self::ttl() - AccessToken::ttl())
+        keypairs::columns::created_at
+            .gt(Utc::now() - Self::ttl() - Duration::seconds(access_token::TTL_SECS))
     }
 
     pub fn for_signing(pg: &PgConn) -> AppResult<Self> {

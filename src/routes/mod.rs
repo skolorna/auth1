@@ -1,6 +1,7 @@
 pub mod keys;
 pub mod login;
 pub mod register;
+pub mod token;
 pub mod users;
 pub mod verify;
 
@@ -31,5 +32,19 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(web::scope("/login").configure(login::configure))
         .service(web::scope("/keys").configure(keys::configure))
         .service(web::scope("/verify").configure(verify::configure))
-        .service(web::scope("/register").configure(register::configure));
+        .service(web::scope("/register").configure(register::configure))
+        .service(web::scope("/token").configure(token::configure));
+}
+
+#[cfg(test)]
+mod tests {
+    use actix_web::http::StatusCode;
+
+    use super::*;
+
+    #[actix_rt::test]
+    async fn health() {
+        let res = get_health().await;
+        assert_eq!(res.status(), StatusCode::OK);
+    }
 }

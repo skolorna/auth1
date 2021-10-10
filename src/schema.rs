@@ -15,6 +15,7 @@ table! {
         hash -> Text,
         created_at -> Timestamptz,
         full_name -> Text,
+        jwt_secret -> Bytea,
     }
 }
 

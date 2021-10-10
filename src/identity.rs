@@ -4,7 +4,7 @@ use crate::{
     db::postgres::PgPool,
     errors::AppError,
     models::User,
-    token::{AccessToken, AccessTokenClaims},
+    token::access_token::{self, AccessTokenClaims},
 };
 
 use actix_web::{http::header::Header, web, FromRequest};
@@ -27,10 +27,10 @@ impl FromRequest for Identity {
     type Config = ();
 
     fn from_request(req: &actix_web::HttpRequest, _: &mut actix_web::dev::Payload) -> Self::Future {
-        let access_token = match Authorization::<Bearer>::parse(req) {
+        let token = match Authorization::<Bearer>::parse(req) {
             Ok(authorization) => {
                 let bearer = authorization.into_scheme();
-                AccessToken::new(bearer.token())
+                bearer.token().to_string()
             }
             Err(_) => return Box::pin(async { Err(AppError::MissingAccessToken) }),
         };
@@ -43,13 +43,10 @@ impl FromRequest for Identity {
         Box::pin(async move {
             use crate::schema::users;
 
-            let conn = pool.get()?;
-            let claims = access_token
-                .verify_and_decode(&conn)
-                // Don't give away details about token formatting specifications.
-                .map_err(|_| AppError::InvalidAccessToken)?;
+            let pg = pool.get()?;
+            let claims = access_token::decode(&pg, &token)?;
             let user_id = claims.sub;
-            let user: User = web::block(move || users::table.find(user_id).first(&conn)).await?;
+            let user: User = web::block(move || users::table.find(user_id).first(&pg)).await?;
 
             Ok(Self { user, claims })
         })

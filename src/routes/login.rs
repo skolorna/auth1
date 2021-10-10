@@ -8,7 +8,6 @@ use crate::db::redis::RedisPool;
 use crate::errors::{AppError, AppResult};
 use crate::models::User;
 use crate::rate_limit::{RateLimit, SlidingWindow};
-use crate::token::{AccessToken, TokenResponse};
 use crate::types::EmailAddress;
 
 #[derive(Debug, Deserialize)]
@@ -35,7 +34,7 @@ async fn handle_login(
 
         verify_password(&credentials.password, &user.hash()?)?;
 
-        AccessToken::sign(&pg, user.id).map(|access_token| TokenResponse { access_token })
+        user.get_tokens(&pg)
     })
     .await?;
 

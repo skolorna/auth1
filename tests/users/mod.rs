@@ -5,7 +5,7 @@ use actix_web::{
     http::StatusCode,
     test::{self, TestRequest},
 };
-use auth1::{create_app, email::StoredEmail, token::AccessTokenClaims};
+use auth1::{create_app, email::StoredEmail, token::access_token::AccessTokenClaims};
 use jsonwebtoken::{DecodingKey, Validation};
 use regex::Regex;
 use serde_json::{json, Value};
