@@ -5,8 +5,9 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
+use indoc::formatdoc;
 use lettre::{
-    message::Mailbox,
+    message::{Mailbox, SinglePart},
     transport::smtp::authentication::{Credentials, Mechanism},
     FileTransport, Message, SmtpTransport, Transport,
 };
@@ -79,19 +80,19 @@ impl Emails {
         self.send(
             &user.mailbox(),
             "Bekräfta din e-postadress",
-            format!(
-                "\
-    V\u{e4}lkommen till Skolorna!
+            formatdoc! {"
+                Välkommen till Skolorna!
                 
-    Tryck p\u{e5} l\u{e4}nken nedan f\u{f6}r att bekr\u{e4}fta din e-postadress:
-                            
-    {}",
+                Tryck på länken nedan för att bekräfta din e-postadress:
+
+                {}
+                ",
                 token
-            ),
+            },
         )
     }
 
-    fn send(&self, recipient: &Mailbox, subject: &str, body: impl ToString) -> AppResult<()> {
+    fn send(&self, recipient: &Mailbox, subject: &str, text: impl ToString) -> AppResult<()> {
         let mut email = Message::builder()
             .to(recipient.clone())
             .from(self.from.clone())
@@ -101,7 +102,7 @@ impl Emails {
             email = email.reply_to(reply_to.clone());
         }
 
-        let email = email.body(body.to_string())?;
+        let email = email.singlepart(SinglePart::plain(text.to_string()))?;
 
         match &self.backend {
             EmailBackend::Smtp {
@@ -126,7 +127,7 @@ impl Emails {
             EmailBackend::Memory { mails } => mails.lock().unwrap().push(StoredEmail {
                 to: recipient.to_string(),
                 subject: subject.into(),
-                body: body.to_string(),
+                body: text.to_string(),
             }),
         }
 
