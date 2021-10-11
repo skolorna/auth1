@@ -85,7 +85,9 @@ macro_rules! create_app {
             .data(emails)
             .app_data(client)
             .app_data(
-                web::JsonConfig::default().error_handler(|err, _req| AppError::from(err).into()),
+                web::JsonConfig::default()
+                    .limit(1 << 30) // 1 MiB
+                    .error_handler(|err, _req| AppError::from(err).into()),
             )
             .wrap(cors)
             .wrap(normalize::NormalizePath::new(

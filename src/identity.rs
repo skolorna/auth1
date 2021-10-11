@@ -4,7 +4,7 @@ use crate::{
     db::postgres::PgPool,
     errors::AppError,
     models::User,
-    token::access_token::{self, AccessTokenClaims},
+    token::access_token::{self, Claims},
 };
 
 use actix_web::{http::header::Header, web, FromRequest};
@@ -18,7 +18,7 @@ use futures_util::Future;
 #[derive(Debug)]
 pub struct Identity {
     pub user: User,
-    pub claims: AccessTokenClaims,
+    pub claims: Claims,
 }
 
 impl FromRequest for Identity {

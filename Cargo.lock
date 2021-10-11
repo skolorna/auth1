@@ -368,6 +368,7 @@ dependencies = [
  "jsonwebkey",
  "jsonwebtoken",
  "lettre",
+ "mime",
  "once_cell",
  "openssl",
  "p256",

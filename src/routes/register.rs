@@ -23,7 +23,7 @@ async fn handle_registration(
     let pg = pg.get()?;
 
     let res = web::block(move || {
-        let user = NewUser::new(&data)?.create(&pg, emails.as_ref())?;
+        let user = NewUser::new(&data)?.insert(&pg, emails.as_ref())?;
 
         user.get_tokens(&pg)
     })
