@@ -1,6 +1,9 @@
 # auth1
 
-[![codecov](https://codecov.io/gh/skolorna/auth1/branch/main/graph/badge.svg?token=0cXNVd3uLC)](https://codecov.io/gh/skolorna/auth1)
+<p align="center">
+<img src="https://codecov.io/gh/skolorna/auth1/branch/main/graph/badge.svg?token=0cXNVd3uLC)](https://codecov.io/gh/skolorna/auth1" />
+<img src="https://jwt.io/img/logo-asset.svg" height="20" />
+</p>
 
 auth1 is an auth system.
 
