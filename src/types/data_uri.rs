@@ -9,23 +9,6 @@ use serde::{de, Deserialize};
 use thiserror::Error;
 
 #[derive(Debug)]
-pub enum Body {
-    Binary(Vec<u8>),
-    Str(String),
-}
-
-impl Display for Body {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Body::Binary(vec) => {
-                write!(f, "{}", Base64Display::with_config(&vec, base64::STANDARD))
-            }
-            Body::Str(str) => write!(f, "{}", str),
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct DataUri {
     pub media_type: Option<Mime>,
     pub b64: bool,
@@ -65,7 +48,7 @@ fn consume_scheme(iter: &mut Chars) -> Option<()> {
 fn before_comma(iter: &mut Chars) -> String {
     let mut str = String::new();
 
-    while let Some(c) = iter.next() {
+    for c in iter {
         if c == ',' {
             break;
         }
@@ -138,6 +121,23 @@ impl<'de> Deserialize<'de> for DataUri {
     }
 }
 
+#[derive(Debug)]
+pub enum Body {
+    Binary(Vec<u8>),
+    Str(String),
+}
+
+impl Display for Body {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Body::Binary(vec) => {
+                write!(f, "{}", Base64Display::with_config(vec, base64::STANDARD))
+            }
+            Body::Str(str) => write!(f, "{}", str),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -151,7 +151,8 @@ mod tests {
         assert_eq!(
             DataUri::from_str("data:text/plain;charset=UTF-8,Hello")
                 .unwrap()
-                .body.to_string(),
+                .body
+                .to_string(),
             "Hello"
         );
     }
