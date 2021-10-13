@@ -32,6 +32,7 @@ serde_json = "1.0.68"
 thiserror = "1.0.26"
 tracing = "0.1.28"
 tracing-subscriber = "0.2.25"
+urlencoding = "2.1.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 zxcvbn = "2.1.1"
 

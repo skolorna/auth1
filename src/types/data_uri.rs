@@ -1,6 +1,7 @@
 use std::{
     fmt::Display,
     str::{Chars, FromStr},
+    string::FromUtf8Error,
 };
 
 use base64::display::Base64Display;
@@ -11,7 +12,6 @@ use thiserror::Error;
 #[derive(Debug)]
 pub struct DataUri {
     pub media_type: Option<Mime>,
-    pub b64: bool,
     pub body: Body,
 }
 
@@ -25,6 +25,9 @@ pub enum FromStrError {
 
     #[error("decode base64 error: {0}")]
     Base64DecodeError(#[from] base64::DecodeError),
+
+    #[error("unicode parse error: {0}")]
+    UnicodeError(#[from] FromUtf8Error),
 }
 
 macro_rules! require {
@@ -84,14 +87,11 @@ impl FromStr for DataUri {
         let body = if b64 {
             Body::Binary(base64::decode(&raw_body).map_err(FromStrError::Base64DecodeError)?)
         } else {
-            Body::Str(raw_body)
+            let text = urlencoding::decode(&raw_body)?;
+            Body::Text(text.into_owned())
         };
 
-        Ok(Self {
-            media_type,
-            b64,
-            body,
-        })
+        Ok(Self { media_type, body })
     }
 }
 
@@ -100,10 +100,14 @@ impl Display for DataUri {
         write!(f, "data:")?;
 
         if let Some(mime) = &self.media_type {
-            write!(f, "{}", mime)?;
+            write!(f, "{}", mime.essence_str())?;
+
+            for (param, value) in mime.params() {
+                write!(f, ";{}={}", param, value)?;
+            }
         }
 
-        if self.b64 {
+        if self.body.is_b64() {
             write!(f, ";base64")?;
         }
 
@@ -121,10 +125,19 @@ impl<'de> Deserialize<'de> for DataUri {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Body {
     Binary(Vec<u8>),
-    Str(String),
+    Text(String),
+}
+
+impl Body {
+    pub fn is_b64(&self) -> bool {
+        match self {
+            Body::Binary(_) => true,
+            Body::Text(_) => false,
+        }
+    }
 }
 
 impl Display for Body {
@@ -133,7 +146,7 @@ impl Display for Body {
             Body::Binary(vec) => {
                 write!(f, "{}", Base64Display::with_config(vec, base64::STANDARD))
             }
-            Body::Str(str) => write!(f, "{}", str),
+            Body::Text(text) => write!(f, "{}", urlencoding::encode(text)),
         }
     }
 }
@@ -149,11 +162,33 @@ mod tests {
         assert!(DataUri::from_str("data:image/jpeg;ohnowhereismyequalsign,mydata").is_err());
 
         assert_eq!(
-            DataUri::from_str("data:text/plain;charset=UTF-8,Hello")
+            DataUri::from_str("data:text/plain;charset=UTF-8,Hello%20There")
                 .unwrap()
-                .body
-                .to_string(),
-            "Hello"
+                .body,
+            Body::Text("Hello There".into())
+        );
+
+        assert!(DataUri::from_str("data:,").unwrap().media_type.is_none());
+    }
+
+    #[test]
+    fn encode() {
+        assert_eq!(
+            DataUri {
+                media_type: Some(mime::APPLICATION_PDF),
+                body: Body::Binary(vec![0, 1, 2, 3]),
+            }
+            .to_string(),
+            "data:application/pdf;base64,AAECAw=="
+        );
+
+        assert_eq!(
+            DataUri {
+                media_type: Some(mime::TEXT_PLAIN_UTF_8),
+                body: Body::Text("Hello There".to_string()),
+            }
+            .to_string(),
+            "data:text/plain;charset=utf-8,Hello%20There"
         );
     }
 }
