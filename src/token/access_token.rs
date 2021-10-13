@@ -16,7 +16,7 @@ fn map_jwt_err(err: jsonwebtoken::errors::Error) -> AppError {
     jwt_err_opaque!(err, AppError::InvalidAccessToken)
 }
 
-pub fn decode(pg: &PgConn, token: &str) -> AppResult<AccessTokenClaims> {
+pub fn decode(pg: &PgConn, token: &str) -> AppResult<Claims> {
     use crate::schema::keypairs::{columns, table};
 
     let header = jsonwebtoken::decode_header(token).map_err(map_jwt_err)?;
@@ -26,8 +26,6 @@ pub fn decode(pg: &PgConn, token: &str) -> AppResult<AccessTokenClaims> {
         .ok_or(AppError::InvalidAccessToken)?
         .parse()
         .map_err(|_| AppError::InvalidAccessToken)?;
-
-    dbg!(kid);
 
     let key: Vec<u8> = table
         .select(columns::public)
@@ -39,10 +37,7 @@ pub fn decode(pg: &PgConn, token: &str) -> AppResult<AccessTokenClaims> {
     let key = DecodingKey::from_rsa_der(&key);
 
     let validation = Validation::new(JWT_ALG);
-    let decoded =
-        jsonwebtoken::decode::<AccessTokenClaims>(token, &key, &validation).map_err(map_jwt_err)?;
-
-    dbg!("decoded");
+    let decoded = jsonwebtoken::decode::<Claims>(token, &key, &validation).map_err(map_jwt_err)?;
 
     Ok(decoded.claims)
 }
@@ -58,7 +53,7 @@ pub fn sign(keypair: &Keypair, sub: UserId) -> AppResult<String> {
         x5t: None,
     };
 
-    let claims = AccessTokenClaims {
+    let claims = Claims {
         sub,
         exp: Utc::now().timestamp() + TTL_SECS,
     };
@@ -70,7 +65,7 @@ pub fn sign(keypair: &Keypair, sub: UserId) -> AppResult<String> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct AccessTokenClaims {
+pub struct Claims {
     /// Subject of the token (the user id).
     pub sub: UserId,
 

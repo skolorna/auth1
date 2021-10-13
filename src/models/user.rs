@@ -32,63 +32,6 @@ pub struct User {
     pub jwt_secret: Vec<u8>,
 }
 
-#[non_exhaustive]
-#[derive(Debug, Deserialize)]
-pub struct RegisterUser {
-    pub email: EmailAddress,
-    pub password: String,
-    pub full_name: PersonalName,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct UpdateUser {
-    pub password: String,
-    pub new_password: Option<String>,
-    pub email: Option<EmailAddress>,
-    pub full_name: Option<PersonalName>,
-}
-
-#[derive(AsChangeset, Default, PartialEq, Eq)]
-#[table_name = "users"]
-struct UserChangeset {
-    pub hash: Option<String>,
-    pub email: Option<EmailAddress>,
-    pub full_name: Option<PersonalName>,
-}
-
-impl UserChangeset {
-    pub fn is_empty(&self) -> bool {
-        *self == Self::default()
-    }
-}
-
-impl TryFrom<UpdateUser> for UserChangeset {
-    type Error = AppError;
-
-    fn try_from(u: UpdateUser) -> Result<Self, Self::Error> {
-        let UpdateUser {
-            password: _,
-            new_password,
-            email,
-            full_name,
-        } = u;
-
-        let hash = new_password.map_or(Ok(None), |p| hash_password(&p).map(Some))?;
-
-        let cs = Self {
-            hash,
-            email,
-            full_name,
-        };
-
-        if cs.is_empty() {
-            Err(AppError::BadRequest(Some("No changes specified.".into())))
-        } else {
-            Ok(cs)
-        }
-    }
-}
-
 impl User {
     pub fn find_by_email(conn: &PgConn, email: &EmailAddress) -> QueryResult<Option<Self>> {
         use crate::schema::users::{columns, dsl::users};
@@ -167,17 +110,76 @@ impl<'a> NewUser<'a> {
         })
     }
 
-    pub fn create(&self, conn: &PgConn, emails: &Emails) -> AppResult<User> {
-        conn.transaction(|| {
+    pub fn insert(&self, pg: &PgConn, emails: &Emails) -> AppResult<User> {
+        pg.transaction(|| {
             let user: User = insert_into(users::table)
                 .values(self)
-                .get_result(conn)
+                .get_result(pg)
                 .map_err(handle_diesel_error)?;
             let token = VerificationToken::generate(&user)?;
             let _ = emails.send_user_confirmation(&user, token);
 
             Ok(user)
         })
+    }
+}
+
+#[non_exhaustive]
+#[derive(Debug, Deserialize)]
+pub struct RegisterUser {
+    pub email: EmailAddress,
+    pub password: String,
+    pub full_name: PersonalName,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateUser {
+    pub password: String,
+    pub new_password: Option<String>,
+    pub email: Option<EmailAddress>,
+    pub full_name: Option<PersonalName>,
+}
+
+#[derive(AsChangeset, Default, PartialEq, Eq)]
+#[table_name = "users"]
+struct UserChangeset {
+    pub hash: Option<String>,
+    pub email: Option<EmailAddress>,
+    pub verified: Option<bool>,
+    pub full_name: Option<PersonalName>,
+}
+
+impl UserChangeset {
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
+impl TryFrom<UpdateUser> for UserChangeset {
+    type Error = AppError;
+
+    fn try_from(u: UpdateUser) -> Result<Self, Self::Error> {
+        let UpdateUser {
+            password: _,
+            new_password,
+            email,
+            full_name,
+        } = u;
+
+        let hash = new_password.map_or(Ok(None), |p| hash_password(&p).map(Some))?;
+
+        let cs = Self {
+            hash,
+            verified: if email.is_some() { Some(false) } else { None },
+            email,
+            full_name,
+        };
+
+        if cs.is_empty() {
+            Err(AppError::BadRequest(Some("No changes specified.".into())))
+        } else {
+            Ok(cs)
+        }
     }
 }
 
@@ -271,5 +273,17 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn update() {
+        let q = UpdateUser {
+            email: Some("jamesbond@example.com".parse().unwrap()),
+            password: "MI6".to_string(),
+            new_password: None,
+            full_name: None,
+        };
+
+        assert_eq!(UserChangeset::try_from(q).unwrap().verified, Some(false));
     }
 }

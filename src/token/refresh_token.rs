@@ -17,12 +17,12 @@ fn map_jwt_err(err: jsonwebtoken::errors::Error) -> AppError {
     jwt_err_opaque!(err, AppError::InvalidRefreshToken)
 }
 
-pub fn decode(pg: &PgConn, token: &str) -> AppResult<RefreshTokenClaims> {
+pub fn decode(pg: &PgConn, token: &str) -> AppResult<Claims> {
     use crate::schema::users::{columns, table};
 
     let validation = Validation::new(JWT_ALG);
 
-    let RefreshTokenClaims { sub, .. } =
+    let Claims { sub, .. } =
         jsonwebtoken::dangerous_insecure_decode_with_validation(token, &validation)
             .map_err(map_jwt_err)?
             .claims;
@@ -34,7 +34,7 @@ pub fn decode(pg: &PgConn, token: &str) -> AppResult<RefreshTokenClaims> {
 
     let key = DecodingKey::from_secret(&secret);
 
-    let claims = jsonwebtoken::decode::<RefreshTokenClaims>(token, &key, &validation)
+    let claims = jsonwebtoken::decode::<Claims>(token, &key, &validation)
         .map_err(map_jwt_err)?
         .claims;
 
@@ -46,7 +46,7 @@ pub fn sign(sub: UserId, secret: &[u8]) -> AppResult<String> {
 
     let header = Header::new(JWT_ALG);
 
-    let claims = RefreshTokenClaims {
+    let claims = Claims {
         sub,
         exp: Utc::now().timestamp() + TTL_SECS,
     };
@@ -55,7 +55,7 @@ pub fn sign(sub: UserId, secret: &[u8]) -> AppResult<String> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct RefreshTokenClaims {
+pub struct Claims {
     pub sub: UserId,
     pub exp: i64,
 }
