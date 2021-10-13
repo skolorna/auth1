@@ -92,7 +92,7 @@ impl Emails {
         )
     }
 
-    fn send(&self, recipient: &Mailbox, subject: &str, text: impl ToString) -> AppResult<()> {
+    fn send(&self, recipient: &Mailbox, subject: &str, body: impl ToString) -> AppResult<()> {
         let mut email = Message::builder()
             .to(recipient.clone())
             .from(self.from.clone())
@@ -102,7 +102,7 @@ impl Emails {
             email = email.reply_to(reply_to.clone());
         }
 
-        let email = email.singlepart(SinglePart::plain(text.to_string()))?;
+        let email = email.singlepart(SinglePart::plain(body.to_string()))?;
 
         match &self.backend {
             EmailBackend::Smtp {
@@ -127,7 +127,7 @@ impl Emails {
             EmailBackend::Memory { mails } => mails.lock().unwrap().push(StoredEmail {
                 to: recipient.to_string(),
                 subject: subject.into(),
-                body: text.to_string(),
+                body: body.to_string(),
             }),
         }
 
