@@ -65,10 +65,10 @@ mod tests {
     #[actix_rt::test]
     async fn errors() {
         let expected: Vec<(TestRequest, StatusCode)> = vec![
-            (TestRequest::get(), StatusCode::UNAUTHORIZED),
+            (TestRequest::get(), StatusCode::FORBIDDEN),
             (
                 TestRequest::with_header(header::AUTHORIZATION, "Bear"),
-                StatusCode::UNAUTHORIZED,
+                StatusCode::FORBIDDEN,
             ),
             (
                 TestRequest::with_header(header::AUTHORIZATION, "Bearer invalidjsonwebtoken"),

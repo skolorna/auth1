@@ -45,7 +45,7 @@ impl ResponseError for AppError {
             AppError::SessionNotFound => StatusCode::NOT_FOUND,
             AppError::InvalidAccessToken => StatusCode::FORBIDDEN,
             AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
-            AppError::MissingAccessToken => StatusCode::UNAUTHORIZED,
+            AppError::MissingAccessToken => StatusCode::FORBIDDEN,
             AppError::InvalidVerificationToken => StatusCode::BAD_REQUEST,
             AppError::JsonError(_) => StatusCode::BAD_REQUEST,
             AppError::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
