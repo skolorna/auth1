@@ -52,6 +52,7 @@ async fn list_keys(pg: web::Data<PgPool>) -> AppResult<HttpResponse> {
         .set(CacheControl(vec![
             CacheDirective::Public,
             CacheDirective::MaxAge(15),
+            CacheDirective::MustRevalidate,
         ]))
         .json(res))
 }
