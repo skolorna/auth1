@@ -28,16 +28,16 @@ pub fn hash_password(password: &str) -> AppResult<String> {
 
     let entropy = zxcvbn::zxcvbn(password, &[])?;
 
-    if entropy.score() < 3 {
-        Err(AppError::WeakPassword {
-            feedback: entropy.feedback().as_ref().map(|f| f.into()),
-        })
-    } else {
+    if entropy.score() >= 3 {
         let salt = SaltString::generate(&mut OsRng);
 
         Ok(Pbkdf2
-            .hash_password_simple(password.as_bytes(), &salt)?
+            .hash_password(password.as_bytes(), &salt)?
             .to_string())
+    } else {
+        Err(AppError::WeakPassword {
+            feedback: entropy.feedback().as_ref().map(|f| f.into()),
+        })
     }
 }
 
