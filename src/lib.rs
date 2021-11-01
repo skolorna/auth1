@@ -2,6 +2,7 @@ pub mod client_info;
 pub mod db;
 pub mod email;
 pub mod password;
+pub mod x509;
 #[macro_use]
 pub mod errors;
 pub mod identity;
