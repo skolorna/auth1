@@ -11,7 +11,7 @@ actix-web = "3.3.2"
 actix-web-httpauth = "0.5.1"
 base64 = "0.13.0"
 chrono = { version = "0.4.19", features = ["serde"] }
-diesel = { version = "1.4.7", features = ["postgres", "r2d2", "chrono", "uuidv07"] }
+diesel = { version = "1.4.8", features = ["postgres", "r2d2", "chrono", "uuidv07"] }
 diesel_migrations = "1.4.0"
 dotenv = "0.15.0"
 fast_chemail = "0.9.6"
