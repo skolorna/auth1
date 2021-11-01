@@ -38,5 +38,5 @@ uuid = { version = "0.8.2", features = ["serde", "v4"] }
 zxcvbn = "2.1.1"
 
 [dev-dependencies]
-actix-rt = "2.2.0"
+actix-rt = "2.3.0"
 regex = "1.5.4"
