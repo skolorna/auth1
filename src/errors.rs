@@ -136,10 +136,10 @@ impl From<RedisError> for AppError {
     }
 }
 
-impl From<pbkdf2::password_hash::Error> for AppError {
-    fn from(err: pbkdf2::password_hash::Error) -> Self {
+impl From<argon2::password_hash::Error> for AppError {
+    fn from(err: argon2::password_hash::Error) -> Self {
         match err {
-            pbkdf2::password_hash::Error::Password => Self::InvalidEmailPassword,
+            argon2::password_hash::Error::Password => Self::InvalidEmailPassword,
             _ => Self::InternalError {
                 cause: err.to_string().into(),
             },

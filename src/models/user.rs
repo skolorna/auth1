@@ -11,7 +11,6 @@ use crate::types::{EmailAddress, PersonalName};
 use chrono::{DateTime, Utc};
 use diesel::{insert_into, prelude::*};
 use lettre::message::Mailbox;
-use pbkdf2::password_hash::PasswordHash;
 use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -43,15 +42,9 @@ impl User {
         Ok(user)
     }
 
-    pub fn hash(&self) -> AppResult<PasswordHash> {
-        PasswordHash::new(&self.hash).map_err(|e| AppError::InternalError {
-            cause: e.to_string().into(),
-        })
-    }
-
     /// Update the user while verifying that the password is correct.
     pub fn update(&self, emails: &Emails, pg: &PgConn, update: UpdateUser) -> AppResult<Self> {
-        verify_password(&update.password, &self.hash()?)?;
+        verify_password(&update.password, &self.hash)?;
 
         let cs: UserChangeset = update.try_into()?;
 

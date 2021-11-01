@@ -32,7 +32,7 @@ async fn handle_login(
         let user =
             User::find_by_email(&pg, &credentials.email)?.ok_or(AppError::InvalidEmailPassword)?;
 
-        verify_password(&credentials.password, &user.hash()?)?;
+        verify_password(&credentials.password, &user.hash)?;
 
         user.get_tokens(&pg)
     })
