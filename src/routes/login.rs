@@ -2,11 +2,11 @@ use actix_web::{web, HttpResponse};
 use serde::Deserialize;
 
 use crate::client_info::ClientInfo;
-use crate::crypto::verify_password;
 use crate::db::postgres::PgPool;
 use crate::db::redis::RedisPool;
 use crate::errors::{AppError, AppResult};
 use crate::models::User;
+use crate::password::verify_password;
 use crate::rate_limit::{RateLimit, SlidingWindow};
 use crate::types::EmailAddress;
 

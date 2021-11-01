@@ -1,7 +1,7 @@
 pub mod client_info;
-pub mod crypto;
 pub mod db;
 pub mod email;
+pub mod password;
 #[macro_use]
 pub mod errors;
 pub mod identity;

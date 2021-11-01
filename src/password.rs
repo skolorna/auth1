@@ -10,7 +10,7 @@ use crate::errors::{AppError, AppResult};
 
 /// Hash and salt a password.
 /// ```
-/// use auth1::crypto::hash_password;
+/// use auth1::password::hash_password;
 ///
 /// let p = "Fel0n1ou$Grü";
 /// assert_ne!(hash_password(p).unwrap(), hash_password(p).unwrap());
@@ -42,7 +42,7 @@ pub fn hash_password(password: &str) -> AppResult<String> {
 /// Compare a password against a hashed value.
 /// ```
 /// use argon2::password_hash::PasswordHash;
-/// use auth1::crypto::{hash_password, verify_password};
+/// use auth1::password::{hash_password, verify_password};
 ///
 /// let password = "d0ntpwnme";
 /// let hash = hash_password(password).unwrap();

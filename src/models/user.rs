@@ -1,9 +1,9 @@
 use std::convert::{TryFrom, TryInto};
 
-use crate::crypto::{hash_password, verify_password};
 use crate::db::postgres::PgConn;
 use crate::email::Emails;
 use crate::errors::{AppError, AppResult};
+use crate::password::{hash_password, verify_password};
 use crate::schema::users;
 use crate::token::{access_token, refresh_token, TokenResponse, VerificationToken};
 use crate::types::{EmailAddress, PersonalName};

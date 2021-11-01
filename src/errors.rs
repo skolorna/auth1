@@ -10,7 +10,7 @@ use serde::Serialize;
 use tracing::log::warn;
 use zxcvbn::ZxcvbnError;
 
-use crate::crypto::PasswordFeedback;
+use crate::password::PasswordFeedback;
 
 #[derive(Debug)]
 pub enum AppError {
