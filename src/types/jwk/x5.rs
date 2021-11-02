@@ -1,4 +1,7 @@
-use openssl::{hash::MessageDigest, x509::X509};
+use openssl::{
+    hash::{DigestBytes, MessageDigest},
+    x509::X509,
+};
 use serde::{Deserialize, Serialize};
 
 use super::b64::{Base64Bytes, Base64UrlBytes};
@@ -6,20 +9,20 @@ use super::b64::{Base64Bytes, Base64UrlBytes};
 pub trait JwkX5 {
     type Err;
 
-    fn sha1_thumbprint(&self) -> Result<Vec<u8>, Self::Err>;
+    fn sha1_thumbprint(&self) -> Result<DigestBytes, Self::Err>;
 
-    fn sha256_thumbprint(&self) -> Result<Vec<u8>, Self::Err>;
+    fn sha256_thumbprint(&self) -> Result<DigestBytes, Self::Err>;
 }
 
 impl JwkX5 for X509 {
     type Err = openssl::error::ErrorStack;
 
-    fn sha1_thumbprint(&self) -> Result<Vec<u8>, Self::Err> {
-        Ok(self.digest(MessageDigest::sha1())?.to_vec())
+    fn sha1_thumbprint(&self) -> Result<DigestBytes, Self::Err> {
+        self.digest(MessageDigest::sha1())
     }
 
-    fn sha256_thumbprint(&self) -> Result<Vec<u8>, Self::Err> {
-        Ok(self.digest(MessageDigest::sha256())?.to_vec())
+    fn sha256_thumbprint(&self) -> Result<DigestBytes, Self::Err> {
+        self.digest(MessageDigest::sha256())
     }
 }
 
