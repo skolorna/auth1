@@ -107,7 +107,7 @@ async fn test_login(server: &Server, email: &str, password: &str) -> String {
     assert_eq!(status, StatusCode::OK);
     let jwks = keys["keys"].as_array().unwrap();
     let jwk = jwks
-        .into_iter()
+        .iter()
         .find(|v| v.as_object().unwrap()["kid"].as_str().unwrap() == key_id)
         .unwrap();
 
