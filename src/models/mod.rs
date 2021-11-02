@@ -1,5 +1,5 @@
-pub mod keypair;
+pub mod certificate;
 pub mod user;
 
-pub use keypair::Keypair;
+pub use certificate::Certificate;
 pub use user::User;

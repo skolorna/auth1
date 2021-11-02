@@ -103,7 +103,7 @@ async fn test_login(server: &Server, email: &str, password: &str) -> String {
         .kid
         .unwrap();
 
-    let (keys, status) = server.send_json(TestRequest::with_uri("/keys")).await;
+    let (keys, status) = server.send_json(TestRequest::with_uri("/jwks.json")).await;
     assert_eq!(status, StatusCode::OK);
     let jwks = keys["keys"].as_array().unwrap();
     let jwk = jwks

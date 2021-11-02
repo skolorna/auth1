@@ -15,7 +15,7 @@ use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::Keypair;
+use super::Certificate;
 
 pub type UserId = Uuid;
 
@@ -62,9 +62,9 @@ impl User {
     }
 
     pub fn get_tokens(&self, pg: &PgConn) -> AppResult<TokenResponse> {
-        let keypair = Keypair::for_signing(pg)?;
+        let cert = Certificate::for_signing(pg)?;
 
-        let access_token = access_token::sign(&keypair, self.id)?;
+        let access_token = access_token::sign(&cert, self.id)?;
         let refresh_token = refresh_token::sign(self.id, &self.jwt_secret)?;
 
         AppResult::Ok(TokenResponse {

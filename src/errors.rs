@@ -147,6 +147,13 @@ impl From<argon2::password_hash::Error> for AppError {
     }
 }
 
+impl From<openssl::error::ErrorStack> for AppError {
+    fn from(err: openssl::error::ErrorStack) -> Self {
+        dbg!(err.to_string());
+        AppError::InternalError { cause: err.into() }
+    }
+}
+
 impl<E: std::fmt::Debug + Into<Self>> From<actix_web::error::BlockingError<E>> for AppError {
     fn from(err: actix_web::error::BlockingError<E>) -> Self {
         use actix_web::error::BlockingError::{Canceled, Error};

@@ -1,39 +1,34 @@
 use actix_web::http::header::{CacheControl, CacheDirective};
 use actix_web::{web, HttpResponse};
 use diesel::prelude::*;
-use jsonwebkey::{JsonWebKey, Key, KeyUse, PublicExponent, RsaPublic};
-use openssl::rsa::Rsa;
+
 use serde::Serialize;
 
 use crate::db::postgres::PgPool;
 use crate::errors::{AppError, AppResult};
-use crate::models::keypair::KeypairId;
-use crate::models::Keypair;
-use crate::schema::keypairs::{columns, table};
+use crate::models::certificate::CertificateId;
+use crate::models::Certificate;
+use crate::schema::certificates::{columns, table};
+use crate::types::jwk::{JsonWebKey, KeyUse};
+use crate::types::DbX509;
 
 async fn list_keys(pg: web::Data<PgPool>) -> AppResult<HttpResponse> {
     let pg = pg.get()?;
 
-    let data: Vec<(KeypairId, Vec<u8>)> = table
-        .select((columns::id, columns::public))
-        .filter(Keypair::valid_for_verifying())
+    let data: Vec<(CertificateId, DbX509)> = table
+        .select((columns::id, columns::x509))
+        .filter(Certificate::valid_for_verifying())
         .load(&pg)?;
 
     let res: Result<Vec<JsonWebKey>, openssl::error::ErrorStack> = data
         .into_iter()
-        .map(|(id, der)| {
-            let rsa = Rsa::public_key_from_der_pkcs1(&der)?;
-
-            let mut jwk = JsonWebKey::new(Key::RSA {
-                public: RsaPublic {
-                    e: PublicExponent,
-                    n: rsa.n().to_vec().into(),
-                },
-                private: None,
-            });
-
-            jwk.key_id = Some(id.to_string());
-            jwk.key_use = Some(KeyUse::Signing);
+        .map(|(id, x509)| {
+            let jwk = JsonWebKey {
+                key: x509.jwk_key()?,
+                key_use: Some(KeyUse::Signing),
+                key_id: Some(id.to_string()),
+                x5: x509.jwk_x5()?,
+            };
 
             Ok(jwk)
         })
