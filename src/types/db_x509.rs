@@ -3,35 +3,11 @@ use diesel::{
     sql_types,
     types::{FromSql, ToSql},
 };
-use openssl::{hash::MessageDigest, x509::X509};
-
-use super::jwk;
+use openssl::x509::X509;
 
 #[derive(Debug, Clone, AsExpression, FromSqlRow)]
 #[sql_type = "diesel::sql_types::Binary"]
 pub struct DbX509(pub X509);
-
-impl DbX509 {
-    pub fn jwk_key(&self) -> Result<jwk::Key, openssl::error::ErrorStack> {
-        let rsa = self.0.public_key()?.rsa()?;
-
-        Ok(jwk::Key::RSA {
-            e: rsa.e().to_vec().into(),
-            n: rsa.n().to_vec().into(),
-        })
-    }
-
-    pub fn jwk_x5(&self) -> Result<jwk::X509Params, openssl::error::ErrorStack> {
-        let chain = vec![self.0.to_der()?.into()];
-
-        Ok(jwk::X509Params {
-            url: None,
-            cert_chain: Some(chain),
-            thumbprint: Some(self.0.digest(MessageDigest::sha1())?.into()),
-            thumbprint_sha256: Some(self.0.digest(MessageDigest::sha256())?.into()),
-        })
-    }
-}
 
 impl<DB> ToSql<sql_types::Binary, DB> for DbX509
 where
@@ -62,5 +38,11 @@ where
 impl From<X509> for DbX509 {
     fn from(x509: X509) -> Self {
         Self(x509)
+    }
+}
+
+impl From<DbX509> for X509 {
+    fn from(x509: DbX509) -> Self {
+        x509.0
     }
 }

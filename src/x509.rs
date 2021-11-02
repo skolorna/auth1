@@ -1,15 +1,21 @@
+use std::{fmt::Debug, iter};
+
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use openssl::{
     asn1::Asn1Time,
     error::ErrorStack,
     hash::MessageDigest,
     nid::Nid,
-    pkey::{HasPrivate, HasPublic, PKeyRef},
+    pkey::{HasPrivate, HasPublic, PKey, PKeyRef, Private},
+    rsa::Rsa,
     x509::{
         extension::{AuthorityKeyIdentifier, BasicConstraints, KeyUsage, SubjectKeyIdentifier},
         X509Name, X509NameRef, X509Ref, X509,
     },
 };
+use tracing::warn;
+
+use crate::util::FromEnvironment;
 
 /// Generate a self-signed x509 certificate.
 /// ```
@@ -107,7 +113,48 @@ pub fn sign_leaf(
     builder.append_extension(BasicConstraints::new().critical().build()?)?;
     builder.append_extension(KeyUsage::new().critical().digital_signature().build()?)?;
 
-    builder.sign(ca_pkey, MessageDigest::sha3_256())?;
+    builder.sign(ca_pkey, MessageDigest::sha256())?;
 
     Ok(builder.build())
+}
+
+#[derive(Clone)]
+pub struct CertificateAuthority {
+    pub cert: X509,
+    pub issuer_chain: Vec<X509>,
+    pub pkey: PKey<Private>,
+}
+
+impl CertificateAuthority {
+    /// Get the chain of certificates.
+    pub fn get_chain(&self) -> impl Iterator<Item = &X509> {
+        iter::once(&self.cert).chain(self.issuer_chain.iter())
+    }
+
+    pub fn self_signed() -> Self {
+        let rsa = Rsa::generate(2048).unwrap();
+        let pkey = PKey::from_rsa(rsa).unwrap();
+
+        Self {
+            cert: self_sign_ca(&pkey).unwrap(),
+            issuer_chain: vec![],
+            pkey,
+        }
+    }
+}
+
+impl FromEnvironment for CertificateAuthority {
+    fn from_env() -> Self {
+        warn!("falling back to a self-signed certificate");
+        Self::self_signed()
+    }
+}
+
+impl Debug for CertificateAuthority {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CertificateAuthority")
+            .field("cert", &self.cert)
+            .field("issuer_chain", &self.issuer_chain)
+            .finish()
+    }
 }

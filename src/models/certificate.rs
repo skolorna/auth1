@@ -1,13 +1,17 @@
 use chrono::{DateTime, Duration, Utc};
 use diesel::{dsl::Gt, expression::bound::Bound, prelude::*, sql_types};
 use jsonwebtoken::EncodingKey;
-use openssl::{pkey::PKey, rsa::Rsa};
+use openssl::{nid::Nid, pkey::PKey, rsa::Rsa, x509::X509Name};
 
 use uuid::Uuid;
 
 use crate::{
-    db::postgres::PgConn, errors::AppResult, schema::certificates, token::access_token,
-    types::DbX509, x509::self_sign_ca,
+    db::postgres::PgConn,
+    errors::AppResult,
+    schema::certificates,
+    token::access_token,
+    types::{DbX509, X509Chain},
+    x509::{sign_leaf, CertificateAuthority},
 };
 
 pub type CertificateId = Uuid;
@@ -16,6 +20,7 @@ pub type CertificateId = Uuid;
 pub struct Certificate {
     pub id: CertificateId,
     pub x509: DbX509,
+    pub chain: X509Chain,
     pub key: Vec<u8>,
     pub not_before: DateTime<Utc>,
     pub not_after: DateTime<Utc>,
@@ -41,7 +46,7 @@ impl Certificate {
         certificates::columns::not_after.gt(Utc::now())
     }
 
-    pub fn for_signing(pg: &PgConn) -> AppResult<Self> {
+    pub fn for_signing(pg: &PgConn, ca: &CertificateAuthority) -> AppResult<Self> {
         use crate::schema::certificates::{columns, table};
 
         pg.transaction(|| {
@@ -55,16 +60,25 @@ impl Certificate {
                 return Ok(cert);
             }
 
-            let rsa = Rsa::generate(Self::RSA_BITS)?;
-            let pkey = PKey::from_rsa(rsa)?;
-            let x509 = self_sign_ca(&pkey)?;
+            let id = Uuid::new_v4();
+
+            let mut name = X509Name::builder()?;
+            name.append_entry_by_nid(Nid::COMMONNAME, &id.to_string())?;
+            let name = name.build();
 
             let not_before = Utc::now();
-            let not_after = not_before + Duration::days(30);
+            let not_after = not_before + Self::ttl();
+
+            let rsa = Rsa::generate(Self::RSA_BITS)?;
+            let pkey = PKey::from_rsa(rsa)?;
+            let x509 = sign_leaf(&name, not_before, not_after, &pkey, &ca.cert, &ca.pkey)?;
+
+            let chain: X509Chain = ca.get_chain().collect();
 
             let new = NewCertificate {
-                id: Uuid::new_v4(),
+                id,
                 x509: &x509.into(),
+                chain: &chain,
                 key: &pkey.private_key_to_der()?,
                 not_before,
                 not_after,
@@ -87,6 +101,7 @@ struct NewCertificate<'a> {
     id: CertificateId,
     x509: &'a DbX509,
     key: &'a [u8],
+    chain: &'a X509Chain,
     not_before: DateTime<Utc>,
     not_after: DateTime<Utc>,
 }

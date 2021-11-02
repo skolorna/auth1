@@ -2,6 +2,7 @@ table! {
     certificates (id) {
         id -> Uuid,
         x509 -> Bytea,
+        chain -> Text,
         key -> Bytea,
         not_before -> Timestamptz,
         not_after -> Timestamptz,
