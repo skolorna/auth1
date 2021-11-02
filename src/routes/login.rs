@@ -9,6 +9,7 @@ use crate::models::User;
 use crate::password::verify_password;
 use crate::rate_limit::{RateLimit, SlidingWindow};
 use crate::types::EmailAddress;
+use crate::x509::CertificateAuthority;
 
 #[derive(Debug, Deserialize)]
 struct LoginRequest {
@@ -19,6 +20,7 @@ struct LoginRequest {
 async fn handle_login(
     pg: web::Data<PgPool>,
     redis: web::Data<RedisPool>,
+    ca: web::Data<CertificateAuthority>,
     credentials: web::Json<LoginRequest>,
     client_info: ClientInfo,
 ) -> AppResult<HttpResponse> {
@@ -34,7 +36,7 @@ async fn handle_login(
 
         verify_password(&credentials.password, &user.hash)?;
 
-        user.get_tokens(&pg)
+        user.get_tokens(&pg, &ca)
     })
     .await?;
 

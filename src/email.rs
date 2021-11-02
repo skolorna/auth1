@@ -18,6 +18,7 @@ use crate::{
     models::User,
     rate_limit::SlidingWindow,
     token::VerificationToken,
+    util::FromEnvironment,
 };
 
 #[derive(Clone)]
@@ -27,8 +28,8 @@ pub struct Emails {
     reply_to: Option<Mailbox>,
 }
 
-impl Emails {
-    pub fn from_env() -> Self {
+impl FromEnvironment for Emails {
+    fn from_env() -> Self {
         let backend = match (
             env::var("SMTP_HOST"),
             env::var("SMTP_USERNAME"),
@@ -57,7 +58,9 @@ impl Emails {
             reply_to: Some(Mailbox::new(None, "hej@skolorna.com".parse().unwrap())),
         }
     }
+}
 
+impl Emails {
     pub fn new_in_memory() -> Self {
         Self {
             backend: EmailBackend::Memory {

@@ -7,6 +7,7 @@ use crate::password::{hash_password, verify_password};
 use crate::schema::users;
 use crate::token::{access_token, refresh_token, TokenResponse, VerificationToken};
 use crate::types::{EmailAddress, PersonalName};
+use crate::x509::CertificateAuthority;
 
 use chrono::{DateTime, Utc};
 use diesel::{insert_into, prelude::*};
@@ -15,7 +16,7 @@ use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::Keypair;
+use super::Certificate;
 
 pub type UserId = Uuid;
 
@@ -61,10 +62,10 @@ impl User {
         Ok(result)
     }
 
-    pub fn get_tokens(&self, pg: &PgConn) -> AppResult<TokenResponse> {
-        let keypair = Keypair::for_signing(pg)?;
+    pub fn get_tokens(&self, pg: &PgConn, ca: &CertificateAuthority) -> AppResult<TokenResponse> {
+        let cert = Certificate::for_signing(pg, ca)?;
 
-        let access_token = access_token::sign(&keypair, self.id)?;
+        let access_token = access_token::sign(&cert, self.id)?;
         let refresh_token = refresh_token::sign(self.id, &self.jwt_secret)?;
 
         AppResult::Ok(TokenResponse {

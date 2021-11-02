@@ -4,8 +4,9 @@ use serde::Deserialize;
 use crate::{
     db::postgres::PgPool,
     errors::AppResult,
-    models::Keypair,
+    models::Certificate,
     token::{access_token, refresh_token, TokenResponse},
+    x509::CertificateAuthority,
 };
 
 #[derive(Debug, Deserialize)]
@@ -16,6 +17,7 @@ enum ManageTokenRequest {
 
 async fn manage_token(
     pool: web::Data<PgPool>,
+    ca: web::Data<CertificateAuthority>,
     web::Json(req): web::Json<ManageTokenRequest>,
 ) -> AppResult<HttpResponse> {
     let pg = pool.get()?;
@@ -25,10 +27,10 @@ async fn manage_token(
             refresh_token: data,
         } => {
             let claims = refresh_token::decode(&pg, &data)?;
-            let keypair = Keypair::for_signing(&pg)?;
+            let cert = Certificate::for_signing(&pg, &ca)?;
 
             TokenResponse {
-                access_token: access_token::sign(&keypair, claims.sub)?,
+                access_token: access_token::sign(&cert, claims.sub)?,
                 refresh_token: None,
             }
         }

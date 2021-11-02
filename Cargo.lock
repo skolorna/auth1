@@ -378,7 +378,6 @@ dependencies = [
  "fast_chemail",
  "futures-util",
  "indoc",
- "jsonwebkey",
  "jsonwebtoken",
  "lettre",
  "mime",
@@ -1206,21 +1205,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce791b7ca6638aae45be056e068fc756d871eb3b3b10b8efa62d1c9cec616752"
 dependencies = [
  "wasm-bindgen",
-]
-
-[[package]]
-name = "jsonwebkey"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3ecc8d072116e06034077e196cd9bfa480a6f31782650ed6213c311c9b04a25"
-dependencies = [
- "base64 0.13.0",
- "bitflags",
- "generic-array",
- "serde",
- "serde_json",
- "thiserror",
- "zeroize",
 ]
 
 [[package]]
@@ -2252,18 +2236,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "synstructure"
-version = "0.12.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "474aaa926faa1603c40b7885a9eaea29b444d1cb2850cb7c0e37bb1a4182f4fa"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
- "unicode-xid",
-]
-
-[[package]]
 name = "tempfile"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2767,21 +2739,6 @@ name = "zeroize"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf68b08513768deaa790264a7fac27a58cbf2705cfcdc9448362229217d7e970"
-dependencies = [
- "zeroize_derive",
-]
-
-[[package]]
-name = "zeroize_derive"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bdff2024a851a322b08f179173ae2ba620445aef1e838f0c196820eade4ae0c7"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
- "synstructure",
-]
 
 [[package]]
 name = "zxcvbn"

@@ -1,4 +1,6 @@
-use crate::{db::postgres::PgConn, diesel::QueryDsl, errors::AppError, models::Keypair};
+use crate::{
+    db::postgres::PgConn, diesel::QueryDsl, errors::AppError, models::Certificate, types::DbX509,
+};
 use chrono::Utc;
 use diesel::prelude::*;
 use jsonwebtoken::{Algorithm, DecodingKey, Header, Validation};
@@ -6,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     errors::AppResult,
-    models::{keypair::KeypairId, user::UserId},
+    models::{certificate::CertificateId, user::UserId},
 };
 
 pub const JWT_ALG: Algorithm = Algorithm::RS256;
@@ -17,24 +19,23 @@ fn map_jwt_err(err: jsonwebtoken::errors::Error) -> AppError {
 }
 
 pub fn decode(pg: &PgConn, token: &str) -> AppResult<Claims> {
-    use crate::schema::keypairs::{columns, table};
+    use crate::schema::certificates::{columns, table};
 
     let header = jsonwebtoken::decode_header(token).map_err(map_jwt_err)?;
 
-    let kid: KeypairId = header
+    let kid: CertificateId = header
         .kid
         .ok_or(AppError::InvalidAccessToken)?
         .parse()
         .map_err(|_| AppError::InvalidAccessToken)?;
 
-    let key: Vec<u8> = table
-        .select(columns::public)
-        .filter(Keypair::valid_for_verifying())
+    let x509: DbX509 = table
+        .select(columns::x509)
+        .filter(Certificate::valid_for_verifying())
         .find(kid)
         .first(pg)?;
-
-    // The proper encoding can be obtained by RsaKey::public_key_to_der_pkcs1.
-    let key = DecodingKey::from_rsa_der(&key);
+    let der = x509.0.public_key()?.rsa()?.public_key_to_der_pkcs1()?;
+    let key = DecodingKey::from_rsa_der(&der);
 
     let validation = Validation::new(JWT_ALG);
     let decoded = jsonwebtoken::decode::<Claims>(token, &key, &validation).map_err(map_jwt_err)?;
@@ -42,13 +43,13 @@ pub fn decode(pg: &PgConn, token: &str) -> AppResult<Claims> {
     Ok(decoded.claims)
 }
 
-pub fn sign(keypair: &Keypair, sub: UserId) -> AppResult<String> {
+pub fn sign(cert: &Certificate, sub: UserId) -> AppResult<String> {
     let header = Header {
         typ: Some("JWT".into()),
         alg: JWT_ALG,
         cty: None,
         jku: None,
-        kid: Some(keypair.id.to_string()),
+        kid: Some(cert.id.to_string()),
         x5u: None,
         x5t: None,
     };
@@ -58,7 +59,7 @@ pub fn sign(keypair: &Keypair, sub: UserId) -> AppResult<String> {
         exp: Utc::now().timestamp() + TTL_SECS,
     };
 
-    let token = jsonwebtoken::encode(&header, &claims, &keypair.jwt_enc())
+    let token = jsonwebtoken::encode(&header, &claims, &cert.jwt_enc())
         .map_err(|e| AppError::InternalError { cause: e.into() })?;
 
     Ok(token)

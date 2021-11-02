@@ -7,11 +7,13 @@ use crate::email::Emails;
 use crate::errors::AppResult;
 use crate::models::user::{NewUser, RegisterUser};
 use crate::rate_limit::{RateLimit, SlidingWindow};
+use crate::x509::CertificateAuthority;
 
 async fn handle_registration(
     pg: web::Data<PgPool>,
     redis: web::Data<RedisPool>,
     emails: web::Data<Emails>,
+    ca: web::Data<CertificateAuthority>,
     web::Json(data): web::Json<RegisterUser>,
     client_info: ClientInfo,
 ) -> AppResult<HttpResponse> {
@@ -25,7 +27,7 @@ async fn handle_registration(
     let res = web::block(move || {
         let user = NewUser::new(&data)?.insert(&pg, emails.as_ref())?;
 
-        user.get_tokens(&pg)
+        user.get_tokens(&pg, &ca)
     })
     .await?;
 
