@@ -15,8 +15,8 @@ pub type CertificateId = Uuid;
 #[derive(Debug, Queryable, Identifiable, Associations)]
 pub struct Certificate {
     pub id: CertificateId,
-    x509: DbX509,
-    key: Vec<u8>,
+    pub x509: DbX509,
+    pub key: Vec<u8>,
     pub not_before: DateTime<Utc>,
     pub not_after: DateTime<Utc>,
 }

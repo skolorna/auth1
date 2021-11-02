@@ -9,7 +9,7 @@ use crate::errors::{AppError, AppResult};
 use crate::models::certificate::CertificateId;
 use crate::models::Certificate;
 use crate::schema::certificates::{columns, table};
-use crate::types::jwk::{JsonWebKey, KeyUse};
+use crate::types::jwk::{Algorithm, JsonWebKey, KeyUse};
 use crate::types::DbX509;
 
 async fn list_keys(pg: web::Data<PgPool>) -> AppResult<HttpResponse> {
@@ -24,6 +24,7 @@ async fn list_keys(pg: web::Data<PgPool>) -> AppResult<HttpResponse> {
         .into_iter()
         .map(|(id, x509)| {
             let jwk = JsonWebKey {
+                algorithm: Some(Algorithm::RS256),
                 key: x509.jwk_key()?,
                 key_use: Some(KeyUse::Signing),
                 key_id: Some(id.to_string()),

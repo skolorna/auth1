@@ -3,6 +3,9 @@ use serde::{de, Deserialize, Deserializer, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JsonWebKey {
+    #[serde(default, rename = "alg", skip_serializing_if = "Option::is_none")]
+    pub algorithm: Option<Algorithm>,
+
     #[serde(flatten)]
     pub key: Key,
 
@@ -19,7 +22,10 @@ pub struct JsonWebKey {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "kty")]
 pub enum Key {
-    RSA { e: Base64Bytes, n: Base64Bytes },
+    RSA {
+        e: Base64UrlBytes,
+        n: Base64UrlBytes,
+    },
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -51,6 +57,13 @@ pub enum KeyUse {
 
     #[serde(rename = "enc")]
     Encryption,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Algorithm {
+    HS256,
+    RS256,
+    ES256,
 }
 
 #[derive(Debug, PartialEq, Eq)]
