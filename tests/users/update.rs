@@ -40,3 +40,28 @@ async fn change_password() {
     let (_, status) = server.login_user(email, "süperstr0ngpas5word").await;
     assert_eq!(status, StatusCode::OK);
 }
+
+#[actix_rt::test]
+async fn no_updates() {
+    let server = Server::new();
+
+    let user = server
+        .create_user(
+            "Winnie the Pooh",
+            "noupdates@example.com",
+            "Za91Wt7PDa+NQ4l4xyONa3B+a76CgpHF",
+        )
+        .await;
+
+    let req = user
+        .req()
+        .method(Method::PATCH)
+        .uri("/users/@me")
+        .set_json(&json!({
+            "password": "Za91Wt7PDa+NQ4l4xyONa3B+a76CgpHF",
+        }));
+    let (body, status) = server.send(req).await;
+    let body = String::from_utf8(body).unwrap();
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body.contains("No changes specified"), "{}", body);
+}
