@@ -9,7 +9,7 @@ use crate::models::User;
 use crate::password::verify_password;
 use crate::rate_limit::{RateLimit, SlidingWindow};
 use crate::types::EmailAddress;
-use crate::x509::CertificateAuthority;
+use crate::x509::ca::CertificateAuthority;
 
 #[derive(Debug, Deserialize)]
 struct LoginRequest {

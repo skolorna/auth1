@@ -33,6 +33,67 @@ impl X509Chain {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &X509> {
+        self.certs.iter()
+    }
+
+    /// Verify that the certificate chain is internally valid (that the certificates are
+    /// ordered correctly).
+    ///
+    /// ```
+    /// use openssl::{nid::Nid, pkey::PKey, rsa::Rsa, x509::{X509Name}};
+    /// use chrono::{Duration, Utc};
+    /// use auth1::x509::{chain::X509Chain, self_sign_ca, sign_leaf};
+    ///
+    /// let ca_pkey = PKey::from_rsa(Rsa::generate(2048).unwrap()).unwrap();
+    /// let ca = self_sign_ca(&ca_pkey).unwrap();
+    ///
+    /// let mut name = X509Name::builder().unwrap();
+    /// name.append_entry_by_nid(Nid::COMMONNAME, "Leaf").unwrap();
+    /// let name = name.build();
+    ///
+    /// let leaf_pkey = PKey::from_rsa(Rsa::generate(2048).unwrap()).unwrap();
+    /// let now = Utc::now();
+    /// let leaf = sign_leaf(&name, now, now + Duration::days(30), &leaf_pkey, &ca, &ca_pkey).unwrap();
+    ///
+    /// let mut chain = X509Chain::new();
+    ///
+    /// // This ordering is important
+    /// chain.add(leaf);
+    /// chain.add(ca);
+    ///
+    /// assert!(chain.verify().unwrap());
+    /// ```
+    ///
+    /// ```
+    /// use openssl::{pkey::PKey, rsa::Rsa};
+    /// use auth1::x509::{chain::X509Chain, self_sign_ca};
+    ///
+    /// let k1 = PKey::from_rsa(Rsa::generate(2048).unwrap()).unwrap();
+    /// let c1 = self_sign_ca(&k1).unwrap();
+    ///
+    /// let k2 = PKey::from_rsa(Rsa::generate(2048).unwrap()).unwrap();
+    /// let c2 = self_sign_ca(&k2).unwrap();
+    ///
+    /// let mut chain = X509Chain::new();
+    /// chain.add(c1);
+    /// chain.add(c2);
+    ///
+    /// // Two self-signed certificates aren't signed by each other.
+    /// assert!(!chain.verify().unwrap());
+    /// ```
+    pub fn verify(&self) -> Result<bool, openssl::error::ErrorStack> {
+        let mut iter = self.certs.windows(2);
+
+        while let Some([left, right]) = iter.next() {
+            if !left.verify(right.public_key()?.as_ref())? {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
+    }
 }
 
 impl Display for X509Chain {

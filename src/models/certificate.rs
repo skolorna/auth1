@@ -10,8 +10,8 @@ use crate::{
     errors::AppResult,
     schema::certificates,
     token::access_token,
-    types::{DbX509, X509Chain},
-    x509::{sign_leaf, CertificateAuthority},
+    types::DbX509,
+    x509::{ca::CertificateAuthority, chain::X509Chain, sign_leaf},
 };
 
 pub type CertificateId = Uuid;

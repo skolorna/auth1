@@ -7,7 +7,7 @@ use crate::password::{hash_password, verify_password};
 use crate::schema::users;
 use crate::token::{access_token, refresh_token, TokenResponse, VerificationToken};
 use crate::types::{EmailAddress, PersonalName};
-use crate::x509::CertificateAuthority;
+use crate::x509::ca::CertificateAuthority;
 
 use chrono::{DateTime, Utc};
 use diesel::{insert_into, prelude::*};

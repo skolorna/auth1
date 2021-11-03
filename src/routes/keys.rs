@@ -13,7 +13,8 @@ use crate::models::Certificate;
 use crate::schema::certificates::{columns, table};
 use crate::types::jwk::x5::{JwkX5, X509Params};
 use crate::types::jwk::{Algorithm, JsonWebKey, KeyUse};
-use crate::types::{DbX509, X509Chain};
+use crate::types::DbX509;
+use crate::x509::chain::X509Chain;
 
 async fn list_keys(pg: web::Data<PgPool>) -> AppResult<HttpResponse> {
     let pg = pg.get()?;

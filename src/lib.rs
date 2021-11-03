@@ -29,7 +29,7 @@ use db::{
 };
 use email::Emails;
 use util::FromEnvironment;
-use x509::CertificateAuthority;
+use x509::ca::CertificateAuthority;
 
 #[derive(Clone)]
 pub struct AppConfig {

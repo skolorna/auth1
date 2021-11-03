@@ -6,7 +6,7 @@ use crate::{
     errors::AppResult,
     models::Certificate,
     token::{access_token, refresh_token, TokenResponse},
-    x509::CertificateAuthority,
+    x509::ca::CertificateAuthority,
 };
 
 #[derive(Debug, Deserialize)]

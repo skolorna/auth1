@@ -7,7 +7,7 @@ use crate::email::Emails;
 use crate::errors::AppResult;
 use crate::models::user::{NewUser, RegisterUser};
 use crate::rate_limit::{RateLimit, SlidingWindow};
-use crate::x509::CertificateAuthority;
+use crate::x509::ca::CertificateAuthority;
 
 async fn handle_registration(
     pg: web::Data<PgPool>,

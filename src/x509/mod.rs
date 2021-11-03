@@ -1,21 +1,18 @@
-use std::{env, fmt::Debug, fs::File, io::Read, iter};
-
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use openssl::{
     asn1::Asn1Time,
     error::ErrorStack,
     hash::MessageDigest,
     nid::Nid,
-    pkey::{HasPrivate, HasPublic, PKey, PKeyRef, Private},
-    rsa::Rsa,
+    pkey::{HasPrivate, HasPublic, PKeyRef},
     x509::{
         extension::{AuthorityKeyIdentifier, BasicConstraints, KeyUsage, SubjectKeyIdentifier},
         X509Name, X509NameRef, X509Ref, X509,
     },
 };
-use tracing::warn;
 
-use crate::util::FromEnvironment;
+pub mod ca;
+pub mod chain;
 
 /// Generate a self-signed x509 certificate.
 /// ```
@@ -116,72 +113,4 @@ pub fn sign_leaf(
     builder.sign(ca_pkey, MessageDigest::sha256())?;
 
     Ok(builder.build())
-}
-
-#[derive(Clone)]
-pub struct CertificateAuthority {
-    pub cert: X509,
-    pub issuer_chain: Vec<X509>,
-    pub pkey: PKey<Private>,
-}
-
-impl CertificateAuthority {
-    /// Get the chain of certificates.
-    pub fn get_chain(&self) -> impl Iterator<Item = &X509> {
-        iter::once(&self.cert).chain(self.issuer_chain.iter())
-    }
-
-    pub fn from_files(cert_file: &str, key_file: &str) -> std::io::Result<Self> {
-        let cert = {
-            let mut file = File::open(cert_file)?;
-            let mut pem = Vec::new();
-            file.read_to_end(&mut pem)?;
-            X509::from_pem(&pem)?
-        };
-
-        let pkey = {
-            let mut file = File::open(key_file)?;
-            let mut pem = Vec::new();
-            file.read_to_end(&mut pem)?;
-            PKey::private_key_from_pem(&pem)?
-        };
-
-        Ok(Self {
-            cert,
-            pkey,
-            issuer_chain: vec![],
-        })
-    }
-
-    pub fn self_signed() -> Self {
-        let rsa = Rsa::generate(2048).unwrap();
-        let pkey = PKey::from_rsa(rsa).unwrap();
-
-        Self {
-            cert: self_sign_ca(&pkey).unwrap(),
-            issuer_chain: vec![],
-            pkey,
-        }
-    }
-}
-
-impl FromEnvironment for CertificateAuthority {
-    fn from_env() -> Self {
-        match (env::var("CERT_FILE"), env::var("KEY_FILE")) {
-            (Ok(cert_file), Ok(key_file)) => Self::from_files(&cert_file, &key_file).unwrap(),
-            _ => {
-                warn!("falling back to a self-signed certificate");
-                Self::self_signed()
-            }
-        }
-    }
-}
-
-impl Debug for CertificateAuthority {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CertificateAuthority")
-            .field("cert", &self.cert)
-            .field("issuer_chain", &self.issuer_chain)
-            .finish()
-    }
 }
