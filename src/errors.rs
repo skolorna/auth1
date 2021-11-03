@@ -10,7 +10,7 @@ use serde::Serialize;
 use tracing::log::warn;
 use zxcvbn::ZxcvbnError;
 
-use crate::crypto::PasswordFeedback;
+use crate::password::PasswordFeedback;
 
 #[derive(Debug)]
 pub enum AppError {
@@ -45,7 +45,7 @@ impl ResponseError for AppError {
             AppError::SessionNotFound => StatusCode::NOT_FOUND,
             AppError::InvalidAccessToken => StatusCode::FORBIDDEN,
             AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
-            AppError::MissingAccessToken => StatusCode::UNAUTHORIZED,
+            AppError::MissingAccessToken => StatusCode::FORBIDDEN,
             AppError::InvalidVerificationToken => StatusCode::BAD_REQUEST,
             AppError::JsonError(_) => StatusCode::BAD_REQUEST,
             AppError::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
@@ -136,14 +136,21 @@ impl From<RedisError> for AppError {
     }
 }
 
-impl From<pbkdf2::password_hash::Error> for AppError {
-    fn from(err: pbkdf2::password_hash::Error) -> Self {
+impl From<argon2::password_hash::Error> for AppError {
+    fn from(err: argon2::password_hash::Error) -> Self {
         match err {
-            pbkdf2::password_hash::Error::Password => Self::InvalidEmailPassword,
+            argon2::password_hash::Error::Password => Self::InvalidEmailPassword,
             _ => Self::InternalError {
                 cause: err.to_string().into(),
             },
         }
+    }
+}
+
+impl From<openssl::error::ErrorStack> for AppError {
+    fn from(err: openssl::error::ErrorStack) -> Self {
+        dbg!(err.to_string());
+        AppError::InternalError { cause: err.into() }
     }
 }
 

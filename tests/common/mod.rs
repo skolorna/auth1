@@ -11,6 +11,7 @@ use auth1::{
     create_app,
     db::{postgres::pg_pool_from_env, redis::redis_pool_from_env},
     email::{Emails, StoredEmail},
+    x509::ca::CertificateAuthority,
     AppConfig,
 };
 use dotenv::dotenv;
@@ -31,6 +32,7 @@ impl Server {
             pg: pg_pool_from_env(),
             emails: Emails::new_in_memory(),
             client: ClientInfoConfig::default(),
+            ca: CertificateAuthority::self_signed(),
         })
     }
 

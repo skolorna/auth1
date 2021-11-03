@@ -10,3 +10,7 @@ use chrono::{DateTime, Utc};
 pub fn http_date_fmt(date: DateTime<Utc>) -> String {
     date.format("%a, %d %b %Y %H:%M:%S GMT").to_string()
 }
+
+pub trait FromEnvironment {
+    fn from_env() -> Self;
+}

@@ -1,39 +1,55 @@
+use std::iter;
+
 use actix_web::http::header::{CacheControl, CacheDirective};
 use actix_web::{web, HttpResponse};
 use diesel::prelude::*;
-use jsonwebkey::{JsonWebKey, Key, KeyUse, PublicExponent, RsaPublic};
-use openssl::rsa::Rsa;
+
 use serde::Serialize;
 
 use crate::db::postgres::PgPool;
 use crate::errors::{AppError, AppResult};
-use crate::models::keypair::KeypairId;
-use crate::models::Keypair;
-use crate::schema::keypairs::{columns, table};
+use crate::models::certificate::CertificateId;
+use crate::models::Certificate;
+use crate::schema::certificates::{columns, table};
+use crate::types::jwk::x5::{JwkX5, X509Params};
+use crate::types::jwk::{Algorithm, JsonWebKey, KeyUse};
+use crate::types::DbX509;
+use crate::x509::chain::X509Chain;
 
 async fn list_keys(pg: web::Data<PgPool>) -> AppResult<HttpResponse> {
     let pg = pg.get()?;
 
-    let data: Vec<(KeypairId, Vec<u8>)> = table
-        .select((columns::id, columns::public))
-        .filter(Keypair::valid_for_verifying())
+    let data: Vec<(CertificateId, DbX509, X509Chain)> = table
+        .select((columns::id, columns::x509, columns::chain))
+        .filter(Certificate::valid_for_verifying())
         .load(&pg)?;
 
     let res: Result<Vec<JsonWebKey>, openssl::error::ErrorStack> = data
         .into_iter()
-        .map(|(id, der)| {
-            let rsa = Rsa::public_key_from_der_pkcs1(&der)?;
+        .map(|(id, x509, rest)| {
+            let key = x509.0.public_key()?.rsa()?.as_ref().into();
+            let sha1_thumbprint = x509.0.sha1_thumbprint()?.into();
+            let sha256_thumbprint = x509.0.sha256_thumbprint()?.into();
 
-            let mut jwk = JsonWebKey::new(Key::RSA {
-                public: RsaPublic {
-                    e: PublicExponent,
-                    n: rsa.n().to_vec().into(),
+            let mut chain = Vec::with_capacity(1 + rest.len());
+
+            for c in iter::once(x509.into()).chain(rest.certs) {
+                let der = c.to_der()?;
+                chain.push(der.into());
+            }
+
+            let jwk = JsonWebKey {
+                algorithm: Some(Algorithm::RS256),
+                key,
+                key_use: Some(KeyUse::Signing),
+                key_id: Some(id.to_string()),
+                x5: X509Params {
+                    url: None,
+                    cert_chain: Some(chain),
+                    thumbprint: Some(sha1_thumbprint),
+                    thumbprint_sha256: Some(sha256_thumbprint),
                 },
-                private: None,
-            });
-
-            jwk.key_id = Some(id.to_string());
-            jwk.key_use = Some(KeyUse::Signing);
+            };
 
             Ok(jwk)
         })
@@ -52,6 +68,7 @@ async fn list_keys(pg: web::Data<PgPool>) -> AppResult<HttpResponse> {
         .set(CacheControl(vec![
             CacheDirective::Public,
             CacheDirective::MaxAge(15),
+            CacheDirective::MustRevalidate,
         ]))
         .json(res))
 }

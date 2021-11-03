@@ -5,7 +5,7 @@ use actix_web::{
     http::StatusCode,
     test::{self, TestRequest},
 };
-use auth1::{create_app, email::StoredEmail, token::access_token::AccessTokenClaims};
+use auth1::{create_app, email::StoredEmail, token::access_token::Claims};
 use jsonwebtoken::{DecodingKey, Validation};
 use regex::Regex;
 use serde_json::{json, Value};
@@ -103,18 +103,18 @@ async fn test_login(server: &Server, email: &str, password: &str) -> String {
         .kid
         .unwrap();
 
-    let (keys, status) = server.send_json(TestRequest::with_uri("/keys")).await;
+    let (keys, status) = server.send_json(TestRequest::with_uri("/jwks.json")).await;
     assert_eq!(status, StatusCode::OK);
     let jwks = keys["keys"].as_array().unwrap();
     let jwk = jwks
-        .into_iter()
+        .iter()
         .find(|v| v.as_object().unwrap()["kid"].as_str().unwrap() == key_id)
         .unwrap();
 
     let decoding_key =
         DecodingKey::from_rsa_components(jwk["n"].as_str().unwrap(), jwk["e"].as_str().unwrap());
 
-    let _ = jsonwebtoken::decode::<AccessTokenClaims>(
+    let _ = jsonwebtoken::decode::<Claims>(
         access_token,
         &decoding_key,
         &Validation::new(jsonwebtoken::Algorithm::RS256),

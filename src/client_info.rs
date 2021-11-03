@@ -8,7 +8,7 @@ use std::{
 use actix_web::{FromRequest, HttpRequest};
 use futures_util::Future;
 
-use crate::errors::AppError;
+use crate::{errors::AppError, util::FromEnvironment};
 
 #[derive(Debug, Clone, Copy)]
 pub struct ClientInfoConfig {
@@ -21,8 +21,10 @@ impl ClientInfoConfig {
     pub fn from_req(req: &HttpRequest) -> &Self {
         req.app_data::<Self>().unwrap_or(&DEFAULT_CONFIG)
     }
+}
 
-    pub fn from_env() -> Self {
+impl FromEnvironment for ClientInfoConfig {
+    fn from_env() -> Self {
         Self {
             trust_proxy: env::var("TRUST_PROXY")
                 .map(|s| s.parse().expect("TRUST_PROXY is not a boolean value"))

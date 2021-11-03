@@ -5,8 +5,9 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
+use indoc::formatdoc;
 use lettre::{
-    message::Mailbox,
+    message::{Mailbox, SinglePart},
     transport::smtp::authentication::{Credentials, Mechanism},
     FileTransport, Message, SmtpTransport, Transport,
 };
@@ -17,6 +18,7 @@ use crate::{
     models::User,
     rate_limit::SlidingWindow,
     token::VerificationToken,
+    util::FromEnvironment,
 };
 
 #[derive(Clone)]
@@ -26,8 +28,8 @@ pub struct Emails {
     reply_to: Option<Mailbox>,
 }
 
-impl Emails {
-    pub fn from_env() -> Self {
+impl FromEnvironment for Emails {
+    fn from_env() -> Self {
         let backend = match (
             env::var("SMTP_HOST"),
             env::var("SMTP_USERNAME"),
@@ -56,7 +58,9 @@ impl Emails {
             reply_to: Some(Mailbox::new(None, "hej@skolorna.com".parse().unwrap())),
         }
     }
+}
 
+impl Emails {
     pub fn new_in_memory() -> Self {
         Self {
             backend: EmailBackend::Memory {
@@ -79,15 +83,15 @@ impl Emails {
         self.send(
             &user.mailbox(),
             "Bekräfta din e-postadress",
-            format!(
-                "\
-    V\u{e4}lkommen till Skolorna!
+            formatdoc! {"
+                Välkommen till Skolorna!
                 
-    Tryck p\u{e5} l\u{e4}nken nedan f\u{f6}r att bekr\u{e4}fta din e-postadress:
-                            
-    {}",
+                Tryck på länken nedan för att bekräfta din e-postadress:
+
+                {}
+                ",
                 token
-            ),
+            },
         )
     }
 
@@ -101,7 +105,7 @@ impl Emails {
             email = email.reply_to(reply_to.clone());
         }
 
-        let email = email.body(body.to_string())?;
+        let email = email.singlepart(SinglePart::plain(body.to_string()))?;
 
         match &self.backend {
             EmailBackend::Smtp {

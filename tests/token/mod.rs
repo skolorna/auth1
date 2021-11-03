@@ -1,4 +1,4 @@
-use actix_web::{http::StatusCode, test::TestRequest};
+use actix_web::http::StatusCode;
 use serde_json::json;
 
 use crate::common::{test_user::TestUser, Server};

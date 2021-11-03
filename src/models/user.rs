@@ -1,22 +1,22 @@
 use std::convert::{TryFrom, TryInto};
 
-use crate::crypto::{hash_password, verify_password};
 use crate::db::postgres::PgConn;
 use crate::email::Emails;
 use crate::errors::{AppError, AppResult};
+use crate::password::{hash_password, verify_password};
 use crate::schema::users;
 use crate::token::{access_token, refresh_token, TokenResponse, VerificationToken};
 use crate::types::{EmailAddress, PersonalName};
+use crate::x509::ca::CertificateAuthority;
 
 use chrono::{DateTime, Utc};
 use diesel::{insert_into, prelude::*};
 use lettre::message::Mailbox;
-use pbkdf2::password_hash::PasswordHash;
 use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::Keypair;
+use super::Certificate;
 
 pub type UserId = Uuid;
 
@@ -32,63 +32,6 @@ pub struct User {
     pub jwt_secret: Vec<u8>,
 }
 
-#[non_exhaustive]
-#[derive(Debug, Deserialize)]
-pub struct RegisterUser {
-    pub email: EmailAddress,
-    pub password: String,
-    pub full_name: PersonalName,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct UpdateUser {
-    pub password: String,
-    pub new_password: Option<String>,
-    pub email: Option<EmailAddress>,
-    pub full_name: Option<PersonalName>,
-}
-
-#[derive(AsChangeset, Default, PartialEq, Eq)]
-#[table_name = "users"]
-struct UserChangeset {
-    pub hash: Option<String>,
-    pub email: Option<EmailAddress>,
-    pub full_name: Option<PersonalName>,
-}
-
-impl UserChangeset {
-    pub fn is_empty(&self) -> bool {
-        *self == Self::default()
-    }
-}
-
-impl TryFrom<UpdateUser> for UserChangeset {
-    type Error = AppError;
-
-    fn try_from(u: UpdateUser) -> Result<Self, Self::Error> {
-        let UpdateUser {
-            password: _,
-            new_password,
-            email,
-            full_name,
-        } = u;
-
-        let hash = new_password.map_or(Ok(None), |p| hash_password(&p).map(Some))?;
-
-        let cs = Self {
-            hash,
-            email,
-            full_name,
-        };
-
-        if cs.is_empty() {
-            Err(AppError::BadRequest(Some("No changes specified.".into())))
-        } else {
-            Ok(cs)
-        }
-    }
-}
-
 impl User {
     pub fn find_by_email(conn: &PgConn, email: &EmailAddress) -> QueryResult<Option<Self>> {
         use crate::schema::users::{columns, dsl::users};
@@ -100,15 +43,9 @@ impl User {
         Ok(user)
     }
 
-    pub fn hash(&self) -> AppResult<PasswordHash> {
-        PasswordHash::new(&self.hash).map_err(|e| AppError::InternalError {
-            cause: e.to_string().into(),
-        })
-    }
-
     /// Update the user while verifying that the password is correct.
     pub fn update(&self, emails: &Emails, pg: &PgConn, update: UpdateUser) -> AppResult<Self> {
-        verify_password(&update.password, &self.hash()?)?;
+        verify_password(&update.password, &self.hash)?;
 
         let cs: UserChangeset = update.try_into()?;
 
@@ -125,10 +62,10 @@ impl User {
         Ok(result)
     }
 
-    pub fn get_tokens(&self, pg: &PgConn) -> AppResult<TokenResponse> {
-        let keypair = Keypair::for_signing(pg)?;
+    pub fn get_tokens(&self, pg: &PgConn, ca: &CertificateAuthority) -> AppResult<TokenResponse> {
+        let cert = Certificate::for_signing(pg, ca)?;
 
-        let access_token = access_token::sign(&keypair, self.id)?;
+        let access_token = access_token::sign(&cert, self.id)?;
         let refresh_token = refresh_token::sign(self.id, &self.jwt_secret)?;
 
         AppResult::Ok(TokenResponse {
@@ -167,17 +104,76 @@ impl<'a> NewUser<'a> {
         })
     }
 
-    pub fn create(&self, conn: &PgConn, emails: &Emails) -> AppResult<User> {
-        conn.transaction(|| {
+    pub fn insert(&self, pg: &PgConn, emails: &Emails) -> AppResult<User> {
+        pg.transaction(|| {
             let user: User = insert_into(users::table)
                 .values(self)
-                .get_result(conn)
+                .get_result(pg)
                 .map_err(handle_diesel_error)?;
             let token = VerificationToken::generate(&user)?;
             let _ = emails.send_user_confirmation(&user, token);
 
             Ok(user)
         })
+    }
+}
+
+#[non_exhaustive]
+#[derive(Debug, Deserialize)]
+pub struct RegisterUser {
+    pub email: EmailAddress,
+    pub password: String,
+    pub full_name: PersonalName,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateUser {
+    pub password: String,
+    pub new_password: Option<String>,
+    pub email: Option<EmailAddress>,
+    pub full_name: Option<PersonalName>,
+}
+
+#[derive(AsChangeset, Default, PartialEq, Eq)]
+#[table_name = "users"]
+struct UserChangeset {
+    pub hash: Option<String>,
+    pub email: Option<EmailAddress>,
+    pub verified: Option<bool>,
+    pub full_name: Option<PersonalName>,
+}
+
+impl UserChangeset {
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
+impl TryFrom<UpdateUser> for UserChangeset {
+    type Error = AppError;
+
+    fn try_from(u: UpdateUser) -> Result<Self, Self::Error> {
+        let UpdateUser {
+            password: _,
+            new_password,
+            email,
+            full_name,
+        } = u;
+
+        let hash = new_password.map_or(Ok(None), |p| hash_password(&p).map(Some))?;
+
+        let cs = Self {
+            hash,
+            verified: if email.is_some() { Some(false) } else { None },
+            email,
+            full_name,
+        };
+
+        if cs.is_empty() {
+            Err(AppError::BadRequest(Some("No changes specified.".into())))
+        } else {
+            Ok(cs)
+        }
     }
 }
 
@@ -271,5 +267,17 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn update() {
+        let q = UpdateUser {
+            email: Some("jamesbond@example.com".parse().unwrap()),
+            password: "MI6".to_string(),
+            new_password: None,
+            full_name: None,
+        };
+
+        assert_eq!(UserChangeset::try_from(q).unwrap().verified, Some(false));
     }
 }

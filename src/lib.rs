@@ -1,7 +1,8 @@
 pub mod client_info;
-pub mod crypto;
 pub mod db;
 pub mod email;
+pub mod password;
+pub mod x509;
 #[macro_use]
 pub mod errors;
 pub mod identity;
@@ -27,6 +28,8 @@ use db::{
     redis::{redis_pool_from_env, RedisPool},
 };
 use email::Emails;
+use util::FromEnvironment;
+use x509::ca::CertificateAuthority;
 
 #[derive(Clone)]
 pub struct AppConfig {
@@ -34,15 +37,17 @@ pub struct AppConfig {
     pub redis: RedisPool,
     pub emails: Emails,
     pub client: ClientInfoConfig,
+    pub ca: CertificateAuthority,
 }
 
-impl AppConfig {
-    pub fn from_env() -> Self {
+impl FromEnvironment for AppConfig {
+    fn from_env() -> Self {
         Self {
             redis: redis_pool_from_env(),
             emails: Emails::from_env(),
             pg: pg_pool_from_env(),
             client: ClientInfoConfig::from_env(),
+            ca: CertificateAuthority::from_env(),
         }
     }
 }
@@ -54,6 +59,7 @@ impl Debug for AppConfig {
             .field("redis", &self.redis)
             .field("emails", &self.emails)
             .field("client", &self.client)
+            .field("ca", &self.ca)
             .finish()
     }
 }
@@ -71,6 +77,7 @@ macro_rules! create_app {
             emails,
             redis,
             client,
+            ca,
         } = $config;
 
         let cors = Cors::default()
@@ -83,9 +90,12 @@ macro_rules! create_app {
             .data(pg)
             .data(redis)
             .data(emails)
+            .data(ca)
             .app_data(client)
             .app_data(
-                web::JsonConfig::default().error_handler(|err, _req| AppError::from(err).into()),
+                web::JsonConfig::default()
+                    .limit(1 << 30) // 1 MiB
+                    .error_handler(|err, _req| AppError::from(err).into()),
             )
             .wrap(cors)
             .wrap(normalize::NormalizePath::new(

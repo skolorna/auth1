@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use actix_web::HttpServer;
-use auth1::{create_app, AppConfig};
+use auth1::{create_app, util::FromEnvironment, AppConfig};
 use dotenv::dotenv;
 use tracing::debug;
 

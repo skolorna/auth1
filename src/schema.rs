@@ -1,9 +1,11 @@
 table! {
-    keypairs (id) {
+    certificates (id) {
         id -> Uuid,
-        public -> Bytea,
-        private -> Bytea,
-        created_at -> Timestamptz,
+        x509 -> Bytea,
+        chain -> Text,
+        key -> Bytea,
+        not_before -> Timestamptz,
+        not_after -> Timestamptz,
     }
 }
 
@@ -19,4 +21,4 @@ table! {
     }
 }
 
-allow_tables_to_appear_in_same_query!(keypairs, users,);
+allow_tables_to_appear_in_same_query!(certificates, users,);
