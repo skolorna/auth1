@@ -383,7 +383,7 @@ dependencies = [
 
 [[package]]
 name = "auth1"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "actix-cors",
  "actix-rt 2.3.0",
