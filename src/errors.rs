@@ -7,7 +7,6 @@ use actix_web::{
 use chrono::{DateTime, Utc};
 use r2d2_redis::redis::RedisError;
 use serde::Serialize;
-use tracing::log::warn;
 use zxcvbn::ZxcvbnError;
 
 use crate::password::PasswordFeedback;
@@ -56,11 +55,6 @@ impl ResponseError for AppError {
 
     fn error_response(&self) -> HttpResponse {
         let mut res = HttpResponseBuilder::new(self.status_code());
-
-        if let AppError::InternalError { cause } = self {
-            // For debugging purpouses, it can be quite helpful to log internal errors.
-            warn!("{}", cause);
-        }
 
         res.json(ErrorJson::from(self))
     }
@@ -214,9 +208,6 @@ pub type AppResult<T> = Result<T, AppError>;
 macro_rules! jwt_err_opaque {
     ($err:expr, $out:expr) => {{
         use ::jsonwebtoken::errors::ErrorKind::*;
-        use ::tracing::warn;
-
-        warn!("{}", $err);
 
         match $err.kind() {
             InvalidToken | InvalidSignature | ExpiredSignature | InvalidIssuer
