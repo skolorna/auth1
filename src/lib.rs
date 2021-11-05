@@ -22,37 +22,66 @@ extern crate diesel_migrations;
 
 use std::fmt::Debug;
 
-use client_info::ClientInfoConfig;
+use client_info::ClientInfoOpt;
 use db::{
-    postgres::{pg_pool_from_env, PgPool},
-    redis::{redis_pool_from_env, RedisPool},
+    postgres::{PgOpt, PgPool},
+    redis::{RedisOpt, RedisPool},
 };
-use email::Emails;
-use util::FromEnvironment;
-use x509::ca::CertificateAuthority;
+use email::{EmailOpt, Emails};
+use structopt::StructOpt;
+use util::FromOpt;
+use x509::ca::{CertificateAuthority, CertificateAuthorityOpt};
 
 #[derive(Clone)]
-pub struct AppConfig {
+pub struct AppData {
     pub pg: PgPool,
     pub redis: RedisPool,
     pub emails: Emails,
-    pub client: ClientInfoConfig,
+    pub client: ClientInfoOpt,
     pub ca: CertificateAuthority,
 }
 
-impl FromEnvironment for AppConfig {
-    fn from_env() -> Self {
+#[derive(Debug, StructOpt)]
+pub struct AppOpt {
+    #[structopt(flatten)]
+    email: EmailOpt,
+
+    #[structopt(flatten)]
+    ca: CertificateAuthorityOpt,
+
+    #[structopt(flatten)]
+    client_info: ClientInfoOpt,
+
+    #[structopt(flatten)]
+    redis: RedisOpt,
+
+    #[structopt(flatten)]
+    postgres: PgOpt,
+}
+
+impl FromOpt for AppData {
+    type Opt = AppOpt;
+
+    fn from_opt(opt: Self::Opt) -> Self {
+        let AppOpt {
+            email,
+            ca,
+            client_info,
+            redis,
+            postgres,
+        } = opt;
+
         Self {
-            redis: redis_pool_from_env(),
-            emails: Emails::from_env(),
-            pg: pg_pool_from_env(),
-            client: ClientInfoConfig::from_env(),
-            ca: CertificateAuthority::from_env(),
+            redis: RedisPool::from_opt(redis),
+            emails: Emails::from_opt(email),
+            pg: PgPool::from_opt(postgres),
+            client: client_info,
+            ca: CertificateAuthority::from_opt(ca),
         }
     }
 }
 
-impl Debug for AppConfig {
+impl Debug for AppData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AppConfig")
             .field("pg", &self.pg.state())
@@ -72,7 +101,7 @@ macro_rules! create_app {
         use ::actix_web::{web, App};
         use ::auth1::errors::AppError;
 
-        let ::auth1::AppConfig {
+        let ::auth1::AppData {
             pg,
             emails,
             redis,

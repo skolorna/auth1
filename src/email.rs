@@ -1,5 +1,4 @@
 use std::{
-    env,
     fmt::Debug,
     path::PathBuf,
     sync::{Arc, Mutex, MutexGuard},
@@ -11,6 +10,7 @@ use lettre::{
     transport::smtp::authentication::{Credentials, Mechanism},
     FileTransport, Message, SmtpTransport, Transport,
 };
+use structopt::StructOpt;
 use tracing::warn;
 
 use crate::{
@@ -18,7 +18,7 @@ use crate::{
     models::User,
     rate_limit::SlidingWindow,
     token::VerificationToken,
-    util::FromEnvironment,
+    util::FromOpt,
 };
 
 #[derive(Clone)]
@@ -28,14 +28,30 @@ pub struct Emails {
     reply_to: Option<Mailbox>,
 }
 
-impl FromEnvironment for Emails {
-    fn from_env() -> Self {
-        let backend = match (
-            env::var("SMTP_HOST"),
-            env::var("SMTP_USERNAME"),
-            env::var("SMTP_PASSWORD"),
-        ) {
-            (Ok(host), Ok(username), Ok(password)) => EmailBackend::Smtp {
+#[derive(Debug, StructOpt)]
+pub struct EmailOpt {
+    #[structopt(long, env)]
+    smtp_host: Option<String>,
+
+    #[structopt(long, env)]
+    smtp_username: Option<String>,
+
+    #[structopt(long, env, hide_env_values = true)]
+    smtp_password: Option<String>,
+}
+
+impl FromOpt for Emails {
+    type Opt = EmailOpt;
+
+    fn from_opt(opt: Self::Opt) -> Self {
+        let EmailOpt {
+            smtp_host,
+            smtp_username,
+            smtp_password,
+        } = opt;
+
+        let backend = match (smtp_host, smtp_username, smtp_password) {
+            (Some(host), Some(username), Some(password)) => EmailBackend::Smtp {
                 host,
                 username,
                 password,

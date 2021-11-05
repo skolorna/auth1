@@ -1,13 +1,14 @@
-use std::{env, fs::File, io::Read, iter};
+use std::{fs::File, io::Read, iter};
 
 use openssl::{
     pkey::{PKey, Private},
     rsa::Rsa,
     x509::X509,
 };
+use structopt::StructOpt;
 use tracing::warn;
 
-use crate::{util::FromEnvironment, x509::self_sign_ca};
+use crate::{util::FromOpt, x509::self_sign_ca};
 use std::fmt::Debug;
 
 use super::chain::X509Chain;
@@ -59,16 +60,27 @@ impl CertificateAuthority {
     }
 }
 
-impl FromEnvironment for CertificateAuthority {
-    fn from_env() -> Self {
-        match (env::var("CERT_FILE"), env::var("KEY_FILE")) {
-            (Ok(cert_file), Ok(key_file)) => Self::from_files(&cert_file, &key_file).unwrap(),
+impl FromOpt for CertificateAuthority {
+    type Opt = CertificateAuthorityOpt;
+
+    fn from_opt(opt: Self::Opt) -> Self {
+        match (opt.cert_file, opt.key_file) {
+            (Some(cert_file), Some(key_file)) => Self::from_files(&cert_file, &key_file).unwrap(),
             _ => {
                 warn!("falling back to a self-signed certificate");
                 Self::self_signed()
             }
         }
     }
+}
+
+#[derive(Debug, StructOpt)]
+pub struct CertificateAuthorityOpt {
+    #[structopt(long, env)]
+    cert_file: Option<String>,
+
+    #[structopt(long, env)]
+    key_file: Option<String>,
 }
 
 impl Debug for CertificateAuthority {

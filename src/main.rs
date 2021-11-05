@@ -1,8 +1,9 @@
 use std::net::SocketAddr;
 
 use actix_web::HttpServer;
-use auth1::{create_app, util::FromEnvironment, AppConfig};
+use auth1::{create_app, util::FromOpt, AppData, AppOpt};
 use dotenv::dotenv;
+use structopt::StructOpt;
 use tracing::debug;
 
 #[actix_web::main]
@@ -10,15 +11,16 @@ async fn main() -> std::io::Result<()> {
     dotenv().ok();
     tracing_subscriber::fmt::init();
 
-    let config = AppConfig::from_env();
+    let opt = AppOpt::from_args();
+    let data = AppData::from_opt(opt);
 
-    debug!("{:?}", config);
+    debug!("{:?}", data);
 
     let addr: SocketAddr = "0.0.0.0:8000".parse().unwrap();
 
     eprintln!("Binding {}", addr);
 
-    HttpServer::new(move || create_app!(config.clone()))
+    HttpServer::new(move || create_app!(data.clone()))
         .bind(addr)?
         .run()
         .await

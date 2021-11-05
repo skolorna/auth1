@@ -7,12 +7,12 @@ use actix_web::{
     test::{self, TestRequest},
 };
 use auth1::{
-    client_info::ClientInfoConfig,
+    client_info::ClientInfoOpt,
     create_app,
-    db::{postgres::pg_pool_from_env, redis::redis_pool_from_env},
+    db::{postgres::PgPool, redis::RedisPool, DbPool},
     email::{Emails, StoredEmail},
     x509::ca::CertificateAuthority,
-    AppConfig,
+    AppData,
 };
 use dotenv::dotenv;
 use serde_json::{json, Value};
@@ -21,17 +21,17 @@ use self::test_user::TestUser;
 
 pub type TestResponse = (Value, StatusCode);
 
-pub struct Server(pub AppConfig);
+pub struct Server(pub AppData);
 
 impl Server {
     pub fn new() -> Self {
         dotenv().ok();
 
-        Self(AppConfig {
-            redis: redis_pool_from_env(),
-            pg: pg_pool_from_env(),
+        Self(AppData {
+            redis: RedisPool::for_tests(),
+            pg: PgPool::for_tests(),
             emails: Emails::new_in_memory(),
-            client: ClientInfoConfig::default(),
+            client: ClientInfoOpt::default(),
             ca: CertificateAuthority::self_signed(),
         })
     }

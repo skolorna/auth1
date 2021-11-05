@@ -1,22 +1,41 @@
-use std::env;
-
+use dotenv::dotenv;
 use r2d2_redis::RedisConnectionManager;
+use structopt::StructOpt;
+
+use crate::util::FromOpt;
+
+use super::DbPool;
 
 pub type RedisPool = r2d2::Pool<RedisConnectionManager>;
 pub type RedisConn = r2d2::PooledConnection<RedisConnectionManager>;
 
-pub fn initialize_redis_pool(redis_url: &str) -> RedisPool {
-    eprintln!("Initializing Redis pool");
-    let manager = RedisConnectionManager::new(redis_url).unwrap();
-    let pool = r2d2::Pool::builder().build(manager).unwrap();
-
-    eprintln!("Redis pool initialized!");
-
-    pool
+#[derive(Debug, StructOpt)]
+pub struct RedisOpt {
+    #[structopt(long, env)]
+    redis_url: String,
 }
 
-pub fn redis_pool_from_env() -> RedisPool {
-    let redis_url = env::var("REDIS_URL").expect("REDIS_URL is not set");
+impl DbPool for RedisPool {
+    fn initialize(url: &str) -> Self {
+        eprintln!("Initializing Redis pool");
+        let manager = RedisConnectionManager::new(url).unwrap();
+        let pool = r2d2::Pool::builder().build(manager).unwrap();
 
-    initialize_redis_pool(&redis_url)
+        eprintln!("Redis pool initialized!");
+
+        pool
+    }
+
+    fn for_tests() -> Self {
+        dotenv().ok();
+        Self::from_opt(RedisOpt::from_args())
+    }
+}
+
+impl FromOpt for RedisPool {
+    type Opt = RedisOpt;
+
+    fn from_opt(opt: Self::Opt) -> Self {
+        Self::initialize(&opt.redis_url)
+    }
 }

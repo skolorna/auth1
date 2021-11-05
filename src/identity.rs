@@ -55,9 +55,8 @@ impl FromRequest for Identity {
 
 #[cfg(test)]
 mod tests {
-    use crate::db::postgres::pg_test_pool;
-
     use super::*;
+    use crate::db::DbPool;
     use actix_web::http::{header, StatusCode};
     use actix_web::ResponseError;
     use actix_web::{dev::Payload, test::TestRequest};
@@ -81,7 +80,7 @@ mod tests {
             ),
         ];
 
-        let pool = pg_test_pool();
+        let pool = PgPool::for_tests();
 
         for (req, status) in expected {
             let req = req.data(pool.clone());
