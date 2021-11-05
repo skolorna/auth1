@@ -63,29 +63,20 @@ mod tests {
 
     #[actix_rt::test]
     async fn errors() {
-        let expected: Vec<(TestRequest, StatusCode)> = vec![
-            (TestRequest::get(), StatusCode::FORBIDDEN),
-            (
-                TestRequest::with_header(header::AUTHORIZATION, "Bear"),
-                StatusCode::FORBIDDEN,
-            ),
-            (
-                TestRequest::with_header(header::AUTHORIZATION, "Bearer invalidjsonwebtoken"),
-                StatusCode::FORBIDDEN,
-            ),
-            (
-                // Correctly formatted JWT, but without the "kid" claim.
-                TestRequest::with_header(header::AUTHORIZATION, "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"),
-                StatusCode::FORBIDDEN,
-            ),
+        let requests: Vec<TestRequest> = vec![
+            TestRequest::get(),
+            TestRequest::with_header(header::AUTHORIZATION, "Bear"),
+            TestRequest::with_header(header::AUTHORIZATION, "Bearer invalidjsonwebtoken"),
+            // Correctly formatted JWT, but without the "kid" claim.
+            TestRequest::with_header(header::AUTHORIZATION, "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"),
         ];
 
         let pool = PgPool::for_tests();
 
-        for (req, status) in expected {
+        for req in requests {
             let req = req.data(pool.clone());
             let res = Identity::from_request(&req.to_http_request(), &mut Payload::None).await;
-            assert_eq!(res.unwrap_err().status_code(), status);
+            assert_eq!(res.unwrap_err().status_code(), StatusCode::FORBIDDEN);
         }
     }
 }

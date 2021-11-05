@@ -229,7 +229,7 @@ mod tests {
     use chrono::NaiveDateTime;
     use serde_json::json;
 
-    use crate::db::postgres::pg_test_conn;
+    use crate::db::{postgres::PgPool, DbPool};
 
     use super::*;
 
@@ -260,7 +260,7 @@ mod tests {
 
     #[test]
     fn get_user_by_email() {
-        let conn = pg_test_conn();
+        let conn = PgPool::for_tests().get().unwrap();
 
         assert!(
             User::find_by_email(&conn, &"nonexistentuser@example.com".parse().unwrap())

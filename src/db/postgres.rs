@@ -56,8 +56,3 @@ impl FromOpt for PgPool {
         PgPool::initialize(&opt.postgres_url)
     }
 }
-
-pub fn pg_test_conn() -> PgConn {
-    let pool = PgPool::for_tests();
-    pool.get().unwrap()
-}
