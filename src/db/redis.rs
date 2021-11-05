@@ -1,3 +1,5 @@
+use std::env;
+
 use dotenv::dotenv;
 use r2d2_redis::RedisConnectionManager;
 use structopt::StructOpt;
@@ -9,9 +11,11 @@ use super::DbPool;
 pub type RedisPool = r2d2::Pool<RedisConnectionManager>;
 pub type RedisConn = r2d2::PooledConnection<RedisConnectionManager>;
 
+const REDIS_URL_ENV: &str = "REDIS_URL";
+
 #[derive(Debug, StructOpt)]
 pub struct RedisOpt {
-    #[structopt(long, env)]
+    #[structopt(long, env = REDIS_URL_ENV)]
     redis_url: String,
 }
 
@@ -28,7 +32,7 @@ impl DbPool for RedisPool {
 
     fn for_tests() -> Self {
         dotenv().ok();
-        Self::from_opt(RedisOpt::from_args())
+        Self::initialize(&env::var(REDIS_URL_ENV).unwrap())
     }
 }
 

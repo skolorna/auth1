@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::{env, sync::Mutex};
 
 use diesel::{r2d2::ConnectionManager, PgConnection};
 use dotenv::dotenv;
@@ -11,6 +11,8 @@ use super::DbPool;
 
 pub type PgPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 pub type PgConn = r2d2::PooledConnection<ConnectionManager<PgConnection>>;
+
+const POSTGRES_URL_ENV: &str = "POSTGRES_URL";
 
 /// Parallel migrations don't work that well. This is mostly for test environments.
 static MIGRATION_MUTEX: Lazy<Mutex<()>> = Lazy::new(Mutex::default);
@@ -39,13 +41,13 @@ impl DbPool for PgPool {
 
     fn for_tests() -> Self {
         dotenv().ok();
-        PgPool::from_opt(PgOpt::from_args())
+        PgPool::initialize(&env::var(POSTGRES_URL_ENV).unwrap())
     }
 }
 
 #[derive(Debug, StructOpt)]
 pub struct PgOpt {
-    #[structopt(long, env, hide_env_values = true)]
+    #[structopt(long, env = POSTGRES_URL_ENV, hide_env_values = true)]
     pub postgres_url: String,
 }
 

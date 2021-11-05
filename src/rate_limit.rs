@@ -70,3 +70,29 @@ impl RateLimit for SlidingWindow {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::db::{redis::RedisPool, DbPool};
+
+    use super::*;
+
+    #[test]
+    fn sliding_window() {
+        const RL: SlidingWindow = SlidingWindow::new("test", 2, 10);
+        let mut conn = RedisPool::for_tests().get().unwrap();
+
+        for _ in 0..10 {
+            assert!(RL.remaining_requests("Alice", &mut conn).is_ok());
+        }
+
+        // 11th request will exceed the quota
+        assert!(matches!(
+            RL.remaining_requests("Alice", &mut conn),
+            Err(AppError::TooManyRequests { .. })
+        ));
+
+        // Other clients can still make requests
+        assert!(RL.remaining_requests("Bob", &mut conn).is_ok());
+    }
+}
