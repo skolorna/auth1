@@ -31,7 +31,7 @@ serde_json = "1.0.72"
 structopt = "0.3.25"
 thiserror = "1.0.30"
 tracing = "0.1.28"
-tracing-subscriber = { version = "0.3.2", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 urlencoding = "2.1.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 zxcvbn = "2.1.2"
