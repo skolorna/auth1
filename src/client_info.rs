@@ -1,5 +1,4 @@
 use std::{
-    env,
     fmt::Display,
     net::{IpAddr, Ipv4Addr},
     pin::Pin,
@@ -7,33 +6,25 @@ use std::{
 
 use actix_web::{FromRequest, HttpRequest};
 use futures_util::Future;
+use structopt::StructOpt;
 
-use crate::{errors::AppError, util::FromEnvironment};
+use crate::errors::AppError;
 
-#[derive(Debug, Clone, Copy)]
-pub struct ClientInfoConfig {
+#[derive(Debug, Clone, Copy, StructOpt)]
+pub struct ClientInfoOpt {
+    #[structopt(long, env)]
     pub trust_proxy: bool,
 }
 
-const DEFAULT_CONFIG: ClientInfoConfig = ClientInfoConfig { trust_proxy: false };
+const DEFAULT_CONFIG: ClientInfoOpt = ClientInfoOpt { trust_proxy: false };
 
-impl ClientInfoConfig {
+impl ClientInfoOpt {
     pub fn from_req(req: &HttpRequest) -> &Self {
         req.app_data::<Self>().unwrap_or(&DEFAULT_CONFIG)
     }
 }
 
-impl FromEnvironment for ClientInfoConfig {
-    fn from_env() -> Self {
-        Self {
-            trust_proxy: env::var("TRUST_PROXY")
-                .map(|s| s.parse().expect("TRUST_PROXY is not a boolean value"))
-                .unwrap_or(false),
-        }
-    }
-}
-
-impl Default for ClientInfoConfig {
+impl Default for ClientInfoOpt {
     fn default() -> Self {
         DEFAULT_CONFIG
     }
@@ -47,10 +38,10 @@ pub struct ClientInfo {
 impl FromRequest for ClientInfo {
     type Error = AppError;
     type Future = Pin<Box<dyn Future<Output = Result<Self, Self::Error>>>>;
-    type Config = ClientInfoConfig;
+    type Config = ClientInfoOpt;
 
     fn from_request(req: &HttpRequest, _: &mut actix_web::dev::Payload) -> Self::Future {
-        let ClientInfoConfig { trust_proxy } = ClientInfoConfig::from_req(req);
+        let ClientInfoOpt { trust_proxy } = ClientInfoOpt::from_req(req);
 
         let addr = if *trust_proxy {
             req.connection_info()
@@ -84,7 +75,7 @@ mod tests {
     #[actix_rt::test]
     async fn trust_proxy() {
         let req = TestRequest::with_header("X-Forwarded-For", "1.1.1.1")
-            .app_data(ClientInfoConfig { trust_proxy: true })
+            .app_data(ClientInfoOpt { trust_proxy: true })
             .to_http_request();
         let info = ClientInfo::from_request(&req, &mut Payload::None)
             .await
@@ -96,7 +87,7 @@ mod tests {
     async fn simple() {
         let req = TestRequest::with_header("X-Forwarded-For", "8.8.8.8")
             .peer_addr(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 80))
-            .app_data(ClientInfoConfig { trust_proxy: false })
+            .app_data(ClientInfoOpt { trust_proxy: false })
             .to_http_request();
         let info = ClientInfo::from_request(&req, &mut Payload::None)
             .await

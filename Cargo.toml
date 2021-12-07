@@ -1,6 +1,6 @@
 [package]
 name = "auth1"
-version = "0.1.11"
+version = "0.1.12"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -16,7 +16,7 @@ diesel = { version = "1.4.8", features = ["postgres", "r2d2", "chrono", "uuidv07
 diesel_migrations = "1.4.0"
 dotenv = "0.15.0"
 fast_chemail = "0.9.6"
-futures-util = "0.3.16"
+futures-util = "0.3.18"
 indoc = "1.0.3"
 jsonwebtoken = "7.2.0"
 lettre = { version = "0.10.0-rc.4", features = ["builder", "file-transport", "tracing"] }
@@ -27,14 +27,15 @@ r2d2 = "0.8.9"
 r2d2_redis = "0.14.0"
 rand_core = { version = "0.6.3", features = ["std"] }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.68"
+serde_json = "1.0.72"
+structopt = "0.3.25"
 thiserror = "1.0.30"
 tracing = "0.1.28"
-tracing-subscriber = "0.3.1"
+tracing-subscriber = { version = "0.3.2", features = ["env-filter"] }
 urlencoding = "2.1.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 zxcvbn = "2.1.2"
 
 [dev-dependencies]
-actix-rt = "2.3.0"
+actix-rt = "2.5.0"
 regex = "1.5.4"

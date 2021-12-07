@@ -45,10 +45,12 @@ pub fn sign(sub: UserId, secret: &[u8]) -> AppResult<String> {
     let key = EncodingKey::from_secret(secret);
 
     let header = Header::new(JWT_ALG);
+    let iat = Utc::now().timestamp();
 
     let claims = Claims {
         sub,
-        exp: Utc::now().timestamp() + TTL_SECS,
+        iat,
+        exp: iat + TTL_SECS,
     };
 
     jsonwebtoken::encode(&header, &claims, &key).map_err(map_jwt_err)
@@ -57,5 +59,6 @@ pub fn sign(sub: UserId, secret: &[u8]) -> AppResult<String> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: UserId,
+    pub iat: i64,
     pub exp: i64,
 }

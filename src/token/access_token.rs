@@ -54,9 +54,12 @@ pub fn sign(cert: &Certificate, sub: UserId) -> AppResult<String> {
         x5t: None,
     };
 
+    let iat = Utc::now().timestamp();
+
     let claims = Claims {
         sub,
-        exp: Utc::now().timestamp() + TTL_SECS,
+        iat,
+        exp: iat + TTL_SECS,
     };
 
     let token = jsonwebtoken::encode(&header, &claims, &cert.jwt_enc())
@@ -69,6 +72,9 @@ pub fn sign(cert: &Certificate, sub: UserId) -> AppResult<String> {
 pub struct Claims {
     /// Subject of the token (the user id).
     pub sub: UserId,
+
+    /// Issue timestamp of the token (UNIX timestamp).
+    pub iat: i64,
 
     /// Expiration timestamp of the token (UNIX timestamp).
     pub exp: i64,

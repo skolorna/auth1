@@ -11,6 +11,8 @@ pub fn http_date_fmt(date: DateTime<Utc>) -> String {
     date.format("%a, %d %b %Y %H:%M:%S GMT").to_string()
 }
 
-pub trait FromEnvironment {
-    fn from_env() -> Self;
+pub trait FromOpt {
+    type Opt;
+
+    fn from_opt(opt: Self::Opt) -> Self;
 }
