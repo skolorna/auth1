@@ -1,6 +1,7 @@
 pub mod keys;
 pub mod login;
 pub mod register;
+pub mod reset;
 pub mod token;
 pub mod users;
 pub mod verify;
@@ -33,7 +34,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(web::scope("/jwks.json").configure(keys::configure))
         .service(web::scope("/verify").configure(verify::configure))
         .service(web::scope("/register").configure(register::configure))
-        .service(web::scope("/token").configure(token::configure));
+        .service(web::scope("/token").configure(token::configure))
+        .service(web::scope("/reset").configure(reset::configure));
 }
 
 #[cfg(test)]
