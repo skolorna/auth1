@@ -1,4 +1,3 @@
--- Your SQL goes here
 CREATE TABLE users (
   id UUID PRIMARY KEY,
   email VARCHAR(320) UNIQUE NOT NULL,
