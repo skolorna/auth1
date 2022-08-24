@@ -1,14 +1,15 @@
 use argon2::{password_hash::SaltString, Argon2, PasswordHash};
 use axum::{response::IntoResponse, routing::post, Extension, Json, Router};
+use lettre::{message::Mailbox, Address};
 use serde::Deserialize;
 use uuid::Uuid;
 
-use super::{ApiContext, Error, Result};
-use crate::jwt;
+use super::{error::SqlxResultExt, ApiContext, Error, Result};
+use crate::{email::send_confirmation_email, jwt};
 
 #[derive(Debug, Deserialize)]
 struct NewUser {
-    email: String,
+    email: Address,
     password: String,
     full_name: String,
 }
@@ -27,13 +28,16 @@ async fn register(
     sqlx::query!(
         r#"INSERT INTO users (id, email, full_name, hash, jwt_secret) values ($1, $2, $3, $4, $5)"#,
         uid,
-        req.email,
+        req.email.to_string(),
         req.full_name,
         password_hash,
         &jwt_secret,
     )
     .execute(&mut tx)
-    .await?;
+    .await
+    .on_constraint("users_email_key", |_| Error::EmailInUse)?;
+
+    send_confirmation_email(&ctx.smtp, Mailbox::new(Some(req.full_name), req.email)).await?;
 
     tx.commit().await?;
 
