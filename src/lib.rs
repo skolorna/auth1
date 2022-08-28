@@ -1,8 +1,11 @@
-use lettre::transport::smtp::authentication::Credentials;
+use http::Result;
+use lettre::{transport::smtp::authentication::Credentials, AsyncSmtpTransport, Tokio1Executor};
 
 pub mod email;
 pub mod http;
+pub mod jwk;
 pub mod jwt;
+pub mod x509;
 
 #[derive(clap::Parser)]
 pub struct Config {
@@ -13,17 +16,38 @@ pub struct Config {
     pub max_database_connections: u32,
 
     #[clap(env)]
-    pub smtp_host: String,
+    pub smtp_host: Option<String>,
 
     #[clap(env)]
-    pub smtp_username: String,
+    pub smtp_username: Option<String>,
 
     #[clap(env)]
-    pub smtp_password: String,
+    pub smtp_password: Option<String>,
 }
 
 impl Config {
-    pub fn smtp_credentials(&self) -> Credentials {
-        Credentials::new(self.smtp_username.clone(), self.smtp_password.clone())
+    pub fn email_client(&self) -> Result<email::Client> {
+        let transport = if let Some(ref host) = self.smtp_host {
+            let mut smtp = AsyncSmtpTransport::<Tokio1Executor>::relay(&host)?;
+
+            match (self.smtp_username.as_ref(), self.smtp_password.as_ref()) {
+                (Some(username), Some(password)) => {
+                    smtp = smtp.credentials(Credentials::new(username.clone(), password.clone()));
+                }
+                _ => {}
+            }
+
+            email::Transport::Smtp(smtp.build())
+        } else {
+            email::Transport::File
+        };
+
+        Ok(email::Client {
+            from: "Skolorna <system@skolorna.com>"
+                .parse()
+                .expect("failed to parse default mailbox"),
+            reply_to: None,
+            transport,
+        })
     }
 }

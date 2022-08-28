@@ -9,7 +9,7 @@ pub enum Error {
     #[error("an internal error occurred")]
     Internal,
 
-    #[error("database error")]
+    #[error("database error: {0}")]
     Sqlx(#[from] sqlx::Error),
 
     #[error("email error")]
@@ -39,6 +39,12 @@ impl Error {
 
 impl From<jsonwebtoken::errors::Error> for Error {
     fn from(_: jsonwebtoken::errors::Error) -> Self {
+        Self::Internal
+    }
+}
+
+impl From<openssl::error::ErrorStack> for Error {
+    fn from(_: openssl::error::ErrorStack) -> Self {
         Self::Internal
     }
 }
