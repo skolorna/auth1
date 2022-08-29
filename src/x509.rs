@@ -159,7 +159,7 @@ impl Authority {
         let subject = subject.build();
 
         let nbf = OffsetDateTime::now_utc();
-        let naf = nbf + Certificate::ttl();
+        let naf = nbf + Certificate::TTL;
 
         let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
         let key = EcKey::generate(&group)?;
@@ -184,24 +184,11 @@ impl Authority {
         })
     }
 
-    pub async fn get_sig_key(&self, db: &mut PgConnection) -> Result<(Uuid, Vec<u8>)> {
-        let mut tx = db.begin().await?;
-
-        let record = sqlx::query!(
-            "SELECT id, key FROM certificates WHERE naf > $1 ORDER BY naf ASC",
-            OffsetDateTime::now_utc() + Duration::seconds(access_token::TTL_SECS)
-        )
-        .fetch_optional(&mut tx)
-        .await?;
-
-        if let Some(record) = record {
-            return Ok((record.id, record.key));
-        }
-
+    async fn gen_insert_leaf(&self, db: &mut PgConnection) -> Result<(Uuid, Vec<u8>)> {
         let authority = self.clone();
         let cert = tokio::task::spawn_blocking(move || authority.gen_leaf())
             .await
-            .map_err(|_| Error::Internal)??;
+            .map_err(|_| Error::internal())??;
 
         sqlx::query!(
           "INSERT INTO certificates (id, x509, chain, key, nbf, naf) VALUES ($1, $2, $3, $4, $5, $6)",
@@ -211,11 +198,55 @@ impl Authority {
           cert.key,
           cert.nbf,
           cert.naf,
-        ).execute(&mut tx).await?;
+        ).execute(db).await?;
+
+        Ok((cert.id, cert.key))
+    }
+
+    pub async fn get_sig_key(&self, db: &mut PgConnection) -> Result<(Uuid, Vec<u8>)> {
+        let mut tx = db.begin().await?;
+
+        let record = sqlx::query!(
+            "SELECT id, key FROM certificates WHERE naf > $1 ORDER BY naf ASC",
+            OffsetDateTime::now_utc() + access_token::TTL
+        )
+        .fetch_optional(&mut tx)
+        .await?;
+
+        if let Some(record) = record {
+            return Ok((record.id, record.key));
+        }
+
+        let res = self.gen_insert_leaf(&mut tx).await?;
+        tx.commit().await?;
+        Ok(res)
+    }
+
+    /// Check if a signing key exists to be used `foresight` amount of time before it's
+    /// needed for access token generation, in order to make sure caches are up-to-date.
+    ///
+    /// `foresight` is the amount of time *in addition to* the access token TTL.
+    pub async fn sig_key_foresight(
+        &self,
+        db: &mut PgConnection,
+        foresight: Duration,
+    ) -> Result<()> {
+        let mut tx = db.begin().await?;
+
+        let record = sqlx::query!(
+            "SELECT COUNT(1) FROM certificates WHERE naf > $1",
+            OffsetDateTime::now_utc() + access_token::TTL + foresight
+        )
+        .fetch_one(&mut tx)
+        .await?;
+
+        if record.count.unwrap_or_default() < 1 {
+            self.gen_insert_leaf(&mut tx).await?;
+        }
 
         tx.commit().await?;
 
-        Ok((cert.id, cert.key))
+        Ok(())
     }
 }
 
@@ -229,9 +260,7 @@ pub struct Certificate {
 }
 
 impl Certificate {
-    const fn ttl() -> Duration {
-        Duration::days(1)
-    }
+    pub const TTL: Duration = Duration::days(1);
 }
 
 fn gen_self_signed(cn: &str, pkey: &PKeyRef<impl HasPrivate>) -> Result<X509, ErrorStack> {
@@ -305,6 +334,3 @@ fn sign_leaf(
 
     Ok(builder.build())
 }
-
-#[cfg(test)]
-mod tests {}

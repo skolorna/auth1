@@ -65,6 +65,7 @@ impl Key {
         match key.group().curve_name() {
             Some(Nid::X9_62_PRIME256V1) => {
                 let mut ctx = BigNumContext::new()?;
+                // the first byte indicates whether the byte vector is compressed
                 let pk_bytes = &key.public_key().to_bytes(
                     key.group(),
                     PointConversionForm::UNCOMPRESSED,
@@ -77,7 +78,7 @@ impl Key {
                     y: y.to_vec(),
                 })
             }
-            _ => todo!(),
+            _ => unimplemented!(),
         }
     }
 }

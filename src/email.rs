@@ -1,6 +1,6 @@
 use crate::http::Result;
 use lettre::{
-    message::{Mailbox, SinglePart},
+    message::{Mailbox, MessageBuilder, SinglePart},
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
 
@@ -32,6 +32,16 @@ impl Client {
     pub async fn send(&self, message: Message) -> Result<()> {
         self.transport.send(message).await
     }
+
+    pub fn msg_builder(&self) -> MessageBuilder {
+        let mut builder = Message::builder().from(self.from.clone());
+
+        if let Some(ref reply_to) = self.reply_to {
+            builder = builder.reply_to(reply_to.clone());
+        }
+
+        builder
+    }
 }
 
 pub async fn send_confirmation_email(
@@ -39,8 +49,8 @@ pub async fn send_confirmation_email(
     to: Mailbox,
     verification_token: &str,
 ) -> Result<()> {
-    let email = Message::builder()
-        .from(client.from.clone())
+    let email = client
+        .msg_builder()
         .to(to)
         .subject("Välkommen")
         .singlepart(SinglePart::plain(format!(

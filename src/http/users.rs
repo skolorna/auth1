@@ -9,10 +9,15 @@ use serde::{Deserialize, Serialize};
 
 use uuid::Uuid;
 
-use super::{error::SqlxResultExt, extract::Identity, ApiContext, Error, Result};
+use super::{
+    error::SqlxResultExt,
+    extract::Identity,
+    token::{TokenResponse, TokenType},
+    ApiContext, Error, Result,
+};
 use crate::{
     email::send_confirmation_email,
-    jwt::{self, verification_token},
+    jwt::{access_token, refresh_token, verification_token},
 };
 
 #[derive(Debug, Deserialize)]
@@ -36,12 +41,12 @@ async fn register(
 ) -> Result<impl IntoResponse> {
     let password_hash = hash_password(req.password).await?;
     let uid = Uuid::new_v4();
-    let jwt_secret = jwt::refresh_token::gen_secret();
-    let _refresh_token = jwt::refresh_token::sign(uid, &jwt_secret)?;
+    let jwt_secret = refresh_token::gen_secret();
+    let refresh_token = refresh_token::sign(uid, &jwt_secret)?;
 
     let mut tx = ctx.db.begin().await?;
 
-    let access_token = jwt::access_token::sign(uid, &ctx.ca, &mut tx).await?;
+    let access_token = access_token::sign(uid, &ctx.ca, &mut tx).await?;
 
     sqlx::query!(
         r#"INSERT INTO users (id, email, full_name, hash, jwt_secret) VALUES ($1, $2, $3, $4, $5)"#,
@@ -66,7 +71,12 @@ async fn register(
 
     tx.commit().await?;
 
-    Ok(access_token)
+    Ok(Json(TokenResponse {
+        access_token,
+        token_type: TokenType::Bearer,
+        expires_in: access_token::TTL.whole_seconds(),
+        refresh_token: Some(refresh_token),
+    }))
 }
 
 async fn current_user(ctx: Extension<ApiContext>, identity: Identity) -> Result<impl IntoResponse> {

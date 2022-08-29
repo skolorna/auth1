@@ -1,12 +1,16 @@
 pub mod refresh_token {
-    use jsonwebtoken::{EncodingKey, Header};
+    use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
     use rand::{thread_rng, Rng};
     use serde::{Deserialize, Serialize};
-    use time::OffsetDateTime;
+    use sqlx::PgExecutor;
+    use time::{Duration, OffsetDateTime};
     use uuid::Uuid;
 
-    pub const TTL_SECS: i64 = 90 * 86400; // 90 days
+    use crate::http::{Error, Result};
+
+    pub const TTL: Duration = Duration::days(90);
     pub const SECRET_LEN: usize = 64;
+    pub const ALG: Algorithm = Algorithm::HS256;
 
     pub fn gen_secret() -> [u8; SECRET_LEN] {
         let mut buf = [0; SECRET_LEN];
@@ -16,18 +20,47 @@ pub mod refresh_token {
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Claims {
-        sub: Uuid,
-        exp: i64,
+        pub sub: Uuid,
+        pub iat: i64,
+        pub exp: i64,
     }
 
     pub fn sign(sub: Uuid, secret: &[u8]) -> Result<String, jsonwebtoken::errors::Error> {
-        let key = EncodingKey::from_secret(secret);
-        let claims = Claims {
-            sub,
-            exp: OffsetDateTime::now_utc().unix_timestamp() + TTL_SECS,
+        let header = Header {
+            typ: Some("JWT".into()),
+            alg: ALG,
+            ..Header::default()
         };
 
-        jsonwebtoken::encode(&Header::default(), &claims, &key)
+        let key = EncodingKey::from_secret(secret);
+        let iat = OffsetDateTime::now_utc().unix_timestamp();
+        let claims = Claims {
+            sub,
+            iat,
+            exp: iat + TTL.whole_seconds(),
+        };
+
+        jsonwebtoken::encode(&header, &claims, &key)
+    }
+
+    pub async fn verify(token: &str, db: impl PgExecutor<'_>) -> Result<Claims> {
+        let claims: Claims = {
+            let mut validation = Validation::default();
+            validation.insecure_disable_signature_validation();
+            jsonwebtoken::decode(token, &DecodingKey::from_secret(&[]), &validation)?.claims
+        };
+
+        let (secret,) =
+            sqlx::query_as::<_, (Vec<u8>,)>("SELECT jwt_secret FROM users WHERE id = $1")
+                .bind(claims.sub)
+                .fetch_optional(db)
+                .await?
+                .ok_or_else(Error::user_not_found)?;
+
+        let key = DecodingKey::from_secret(&secret);
+        let data = jsonwebtoken::decode(token, &key, &Validation::new(ALG))?;
+
+        Ok(data.claims)
     }
 }
 
@@ -36,18 +69,22 @@ pub mod access_token {
     use openssl::x509::X509;
     use serde::{Deserialize, Serialize};
     use sqlx::{PgConnection, PgExecutor};
-    use time::OffsetDateTime;
+    use time::{Duration, OffsetDateTime};
     use tracing::instrument;
     use uuid::Uuid;
 
-    use crate::{http::Result, x509};
+    use crate::{
+        http::{Error, Result},
+        x509,
+    };
 
     pub const ALG: Algorithm = Algorithm::ES256;
-    pub const TTL_SECS: i64 = 600;
+    pub const TTL: Duration = Duration::minutes(10);
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Claims {
         pub sub: Uuid,
+        pub iat: i64,
         pub exp: i64,
     }
 
@@ -63,29 +100,35 @@ pub mod access_token {
             ..Header::default()
         };
 
+        let iat = OffsetDateTime::now_utc().unix_timestamp();
         let claims = Claims {
             sub,
-            exp: OffsetDateTime::now_utc().unix_timestamp() + TTL_SECS,
+            iat,
+            exp: iat + TTL.whole_seconds(),
         };
 
-        Ok(jsonwebtoken::encode(&header, &claims, &key).unwrap())
+        Ok(jsonwebtoken::encode(&header, &claims, &key)?)
     }
 
     pub async fn verify(token: &str, db: impl PgExecutor<'_>) -> Result<Claims> {
         let header = jsonwebtoken::decode_header(token)?;
-        let kid: Uuid = header.kid.unwrap().parse().unwrap();
+        let kid: Uuid = header
+            .kid
+            .ok_or(Error::Unauthorized)?
+            .parse()
+            .map_err(|_| Error::Unauthorized)?;
 
         let record = sqlx::query!("SELECT x509 FROM certificates WHERE id = $1", kid)
             .fetch_optional(db)
             .await?
-            .expect("no cert found");
+            .ok_or(Error::Unauthorized)?;
         let x509 = X509::from_der(&record.x509)?;
-        let pub_der = x509.public_key()?.rsa()?.public_key_to_der_pkcs1()?;
-        let key = DecodingKey::from_rsa_der(&pub_der);
+        let key = x509.public_key()?.public_key_to_pem()?;
+        let key = DecodingKey::from_ec_pem(&key)?;
 
-        let decoded = jsonwebtoken::decode::<Claims>(token, &key, &Validation::new(ALG))?;
+        let data = jsonwebtoken::decode::<Claims>(token, &key, &Validation::new(ALG))?;
 
-        Ok(decoded.claims)
+        Ok(data.claims)
     }
 }
 

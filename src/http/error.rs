@@ -3,6 +3,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use sqlx::error::DatabaseError;
+use tracing::error;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -20,6 +21,9 @@ pub enum Error {
 
     #[error("email is already in use")]
     EmailInUse,
+
+    #[error("unauthorized")]
+    Unauthorized,
 }
 
 impl Error {
@@ -29,22 +33,45 @@ impl Error {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             Self::EmailInUse => StatusCode::BAD_REQUEST,
+            Self::Unauthorized => StatusCode::UNAUTHORIZED,
         }
     }
 
-    pub fn internal() -> Self {
+    pub const fn internal() -> Self {
         Self::Internal
+    }
+
+    pub const fn user_not_found() -> Self {
+        Self::Unauthorized
     }
 }
 
 impl From<jsonwebtoken::errors::Error> for Error {
-    fn from(_: jsonwebtoken::errors::Error) -> Self {
-        Self::Internal
+    fn from(e: jsonwebtoken::errors::Error) -> Self {
+        use jsonwebtoken::errors::ErrorKind;
+
+        match e.kind() {
+            ErrorKind::InvalidToken
+            | ErrorKind::InvalidAlgorithmName
+            | ErrorKind::MissingRequiredClaim(_)
+            | ErrorKind::InvalidIssuer
+            | ErrorKind::InvalidAudience
+            | ErrorKind::ExpiredSignature
+            | ErrorKind::InvalidAlgorithm
+            | ErrorKind::ImmatureSignature
+            | ErrorKind::InvalidSubject
+            | ErrorKind::Base64(_)
+            | ErrorKind::Json(_)
+            | ErrorKind::Utf8(_)
+            | ErrorKind::InvalidSignature => Self::Unauthorized,
+            _ => Self::Internal,
+        }
     }
 }
 
 impl From<openssl::error::ErrorStack> for Error {
-    fn from(_: openssl::error::ErrorStack) -> Self {
+    fn from(e: openssl::error::ErrorStack) -> Self {
+        error!("openssl error: {e}");
         Self::Internal
     }
 }
