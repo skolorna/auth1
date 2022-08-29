@@ -1,5 +1,6 @@
 use http::Result;
 use lettre::{transport::smtp::authentication::Credentials, AsyncSmtpTransport, Tokio1Executor};
+use tracing::warn;
 
 pub mod email;
 pub mod http;
@@ -28,13 +29,13 @@ pub struct Config {
 impl Config {
     pub fn email_client(&self) -> Result<email::Client> {
         let transport = if let Some(ref host) = self.smtp_host {
-            let mut smtp = AsyncSmtpTransport::<Tokio1Executor>::relay(&host)?;
+            let mut smtp = AsyncSmtpTransport::<Tokio1Executor>::relay(host)?;
 
             match (self.smtp_username.as_ref(), self.smtp_password.as_ref()) {
                 (Some(username), Some(password)) => {
                     smtp = smtp.credentials(Credentials::new(username.clone(), password.clone()));
                 }
-                _ => {}
+                _ => warn!("smtp credentials are missing; skipping auth"),
             }
 
             email::Transport::Smtp(smtp.build())

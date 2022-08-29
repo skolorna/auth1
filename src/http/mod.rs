@@ -1,6 +1,6 @@
 use anyhow::Context;
 use axum::{response::IntoResponse, routing::get, Extension, Json, Router};
-use lettre::{AsyncSmtpTransport, Tokio1Executor};
+
 use serde::Serialize;
 use sqlx::PgPool;
 use std::{net::SocketAddr, sync::Arc};
@@ -9,7 +9,7 @@ use crate::{email, x509, Config};
 
 mod error;
 mod extract;
-mod jwks;
+mod keys;
 mod users;
 
 pub use error::Error;
@@ -40,7 +40,7 @@ pub fn app(config: Config, db: PgPool, email: email::Client, ca: x509::Authority
     Router::new()
         .route("/health", get(health))
         .nest("/users", users::routes())
-        .route("/jwks.json", get(jwks::get))
+        .nest("/keys", keys::routes())
         .layer(Extension(ApiContext {
             config: Arc::new(config),
             db,

@@ -35,13 +35,14 @@ pub mod access_token {
     use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
     use openssl::x509::X509;
     use serde::{Deserialize, Serialize};
-    use sqlx::{Executor, PgConnection, PgExecutor, Postgres};
+    use sqlx::{PgConnection, PgExecutor};
     use time::OffsetDateTime;
+    use tracing::instrument;
     use uuid::Uuid;
 
     use crate::{http::Result, x509};
 
-    pub const ALG: Algorithm = Algorithm::RS256;
+    pub const ALG: Algorithm = Algorithm::ES256;
     pub const TTL_SECS: i64 = 600;
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -50,9 +51,10 @@ pub mod access_token {
         pub exp: i64,
     }
 
+    #[instrument(skip_all)]
     pub async fn sign(sub: Uuid, ca: &x509::Authority, db: &mut PgConnection) -> Result<String> {
         let (kid, key) = ca.get_sig_key(db).await?;
-        let key = EncodingKey::from_rsa_der(&key);
+        let key = EncodingKey::from_ec_pem(&key)?;
 
         let header = Header {
             typ: Some("JWT".into()),
@@ -66,7 +68,7 @@ pub mod access_token {
             exp: OffsetDateTime::now_utc().unix_timestamp() + TTL_SECS,
         };
 
-        jsonwebtoken::encode(&header, &claims, &key).map_err(Into::into)
+        Ok(jsonwebtoken::encode(&header, &claims, &key).unwrap())
     }
 
     pub async fn verify(token: &str, db: impl PgExecutor<'_>) -> Result<Claims> {
@@ -93,7 +95,7 @@ pub mod verification_token {
 
     fn gen_secret(email: &str, password_hash: &str) -> Vec<u8> {
         let mut secret = email.as_bytes().to_vec();
-        secret.extend_from_slice(&password_hash.as_bytes());
+        secret.extend_from_slice(password_hash.as_bytes());
         secret
     }
 

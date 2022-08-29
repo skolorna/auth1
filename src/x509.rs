@@ -1,30 +1,32 @@
 use std::{fmt::Display, str::FromStr};
 
 use base64::display::Base64Display;
-use jsonwebtoken::EncodingKey;
+
 use openssl::{
     asn1::Asn1Time,
+    ec::{EcGroup, EcKey},
     error::ErrorStack,
     hash::MessageDigest,
     nid::Nid,
     pkey::{HasPrivate, HasPublic, PKey, PKeyRef, Private},
-    rsa::Rsa,
     x509::{
         extension::{AuthorityKeyIdentifier, BasicConstraints, KeyUsage, SubjectKeyIdentifier},
         X509Name, X509NameRef, X509Ref, X509,
     },
 };
 use sqlx::{
-    database::HasArguments,
     encode::IsNull,
     error::BoxDynError,
-    postgres::{PgArgumentBuffer, PgRow, PgValueRef},
-    Connection, Database, FromRow, PgConnection, PgExecutor, Postgres, Row,
+    postgres::{PgArgumentBuffer, PgValueRef},
+    Connection, PgConnection, Postgres,
 };
 use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
-use crate::{http::Result, jwt::access_token};
+use crate::{
+    http::{Error, Result},
+    jwt::access_token,
+};
 
 #[derive(Debug, Default, Clone)]
 pub struct Chain(Vec<X509>);
@@ -130,6 +132,7 @@ impl sqlx::Type<sqlx::Postgres> for Chain {
     }
 }
 
+#[derive(Clone)]
 pub struct Authority {
     chain: Chain,
     key: PKey<Private>,
@@ -137,8 +140,10 @@ pub struct Authority {
 
 impl Authority {
     pub fn self_signed() -> Result<Self, ErrorStack> {
-        let rsa = Rsa::generate(2048)?;
-        let key = PKey::from_rsa(rsa)?;
+        let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
+        let key = EcKey::generate(&group)?;
+        let key = PKey::from_ec_key(key)?;
+
         let cert = gen_self_signed("AUTH1 SELF SIGNED", &key)?;
         let mut chain = Chain::new();
         chain.push(cert);
@@ -156,8 +161,10 @@ impl Authority {
         let nbf = OffsetDateTime::now_utc();
         let naf = nbf + Certificate::ttl();
 
-        let rsa = Rsa::generate(2048)?;
-        let key = PKey::from_rsa(rsa)?;
+        let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
+        let key = EcKey::generate(&group)?;
+        let key = PKey::from_ec_key(key)?;
+
         let x509 = sign_leaf(
             &subject,
             nbf,
@@ -171,7 +178,7 @@ impl Authority {
             id,
             x509,
             chain: self.chain.clone(),
-            key: key.private_key_to_der()?,
+            key: key.private_key_to_pem_pkcs8()?,
             nbf,
             naf,
         })
@@ -191,7 +198,10 @@ impl Authority {
             return Ok((record.id, record.key));
         }
 
-        let cert = self.gen_leaf()?;
+        let authority = self.clone();
+        let cert = tokio::task::spawn_blocking(move || authority.gen_leaf())
+            .await
+            .map_err(|_| Error::Internal)??;
 
         sqlx::query!(
           "INSERT INTO certificates (id, x509, chain, key, nbf, naf) VALUES ($1, $2, $3, $4, $5, $6)",

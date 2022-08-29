@@ -6,7 +6,7 @@ use axum::{
 };
 use lettre::{message::Mailbox, Address};
 use serde::{Deserialize, Serialize};
-use time::OffsetDateTime;
+
 use uuid::Uuid;
 
 use super::{error::SqlxResultExt, extract::Identity, ApiContext, Error, Result};
@@ -37,7 +37,7 @@ async fn register(
     let password_hash = hash_password(req.password).await?;
     let uid = Uuid::new_v4();
     let jwt_secret = jwt::refresh_token::gen_secret();
-    let refresh_token = jwt::refresh_token::sign(uid, &jwt_secret)?;
+    let _refresh_token = jwt::refresh_token::sign(uid, &jwt_secret)?;
 
     let mut tx = ctx.db.begin().await?;
 

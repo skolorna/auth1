@@ -5,7 +5,6 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, TypedHeader,
 };
-use uuid::Uuid;
 
 use crate::{http::ApiContext, jwt::access_token};
 
