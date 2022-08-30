@@ -1,203 +1,89 @@
-use std::{
-    fmt::Debug,
-    path::PathBuf,
-    sync::{Arc, Mutex, MutexGuard},
-};
+use std::collections::HashMap;
 
+use crate::http::{Error, Result};
 use indoc::formatdoc;
 use lettre::{
-    message::{Mailbox, SinglePart},
-    transport::smtp::authentication::{Credentials, Mechanism},
-    FileTransport, Message, SmtpTransport, Transport,
+    message::{Mailbox, MessageBuilder, SinglePart},
+    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
-use structopt::StructOpt;
-use tracing::warn;
+use strfmt::Format;
+use tracing::instrument;
 
-use crate::{
-    errors::{AppError, AppResult},
-    models::User,
-    rate_limit::SlidingWindow,
-    token::VerificationToken,
-    util::FromOpt,
-};
-
-#[derive(Clone)]
-pub struct Emails {
-    backend: EmailBackend,
-    from: Mailbox,
-    reply_to: Option<Mailbox>,
+pub enum Transport {
+    Smtp(AsyncSmtpTransport<Tokio1Executor>),
+    File,
 }
 
-#[derive(Debug, StructOpt)]
-pub struct EmailOpt {
-    #[structopt(long, env)]
-    smtp_host: Option<String>,
-
-    #[structopt(long, env)]
-    smtp_username: Option<String>,
-
-    #[structopt(long, env, hide_env_values = true)]
-    smtp_password: Option<String>,
-}
-
-impl FromOpt for Emails {
-    type Opt = EmailOpt;
-
-    fn from_opt(opt: Self::Opt) -> Self {
-        let EmailOpt {
-            smtp_host,
-            smtp_username,
-            smtp_password,
-        } = opt;
-
-        let backend = match (smtp_host, smtp_username, smtp_password) {
-            (Some(host), Some(username), Some(password)) => EmailBackend::Smtp {
-                host,
-                username,
-                password,
-            },
-            _ => {
-                warn!("some smtp options are not set; falling back to file backend for email");
-
-                EmailBackend::FileSystem {
-                    path: "/tmp".parse().unwrap(),
-                }
+impl Transport {
+    pub async fn send(&self, message: Message) -> Result<()> {
+        match self {
+            Transport::Smtp(smtp) => {
+                smtp.send(message).await?;
             }
-        };
-
-        Self {
-            backend,
-            from: Mailbox::new(
-                Some("Skolorna".into()),
-                "system@skolorna.com".parse().unwrap(),
-            ),
-            reply_to: Some(Mailbox::new(None, "hej@skolorna.com".parse().unwrap())),
-        }
-    }
-}
-
-impl Emails {
-    pub fn new_in_memory() -> Self {
-        Self {
-            backend: EmailBackend::Memory {
-                mails: Arc::new(Mutex::new(Vec::new())),
-            },
-            from: Mailbox::new(None, "test@localhost".parse().unwrap()),
-            reply_to: None,
-        }
-    }
-
-    pub fn mails_in_memory(&self) -> Option<MutexGuard<Vec<StoredEmail>>> {
-        if let EmailBackend::Memory { mails } = &self.backend {
-            Some(mails.lock().unwrap())
-        } else {
-            None
-        }
-    }
-
-    pub fn send_user_confirmation(&self, user: &User, token: VerificationToken) -> AppResult<()> {
-        self.send(
-            &user.mailbox(),
-            "Bekräfta din e-postadress",
-            formatdoc! {"
-                Välkommen till Skolorna!
-                
-                Tryck på länken nedan för att bekräfta din e-postadress:
-
-                {}
-                ",
-                token
-            },
-        )
-    }
-
-    fn send(&self, recipient: &Mailbox, subject: &str, body: impl ToString) -> AppResult<()> {
-        let mut email = Message::builder()
-            .to(recipient.clone())
-            .from(self.from.clone())
-            .subject(subject);
-
-        if let Some(reply_to) = self.reply_to.as_ref() {
-            email = email.reply_to(reply_to.clone());
-        }
-
-        let email = email.singlepart(SinglePart::plain(body.to_string()))?;
-
-        match &self.backend {
-            EmailBackend::Smtp {
-                host,
-                username,
-                password,
-                ..
-            } => {
-                SmtpTransport::relay(host)?
-                    .credentials(Credentials::new(username.clone(), password.clone()))
-                    .authentication(vec![Mechanism::Plain])
-                    .build()
-                    .send(&email)?;
-            }
-            EmailBackend::FileSystem { path } => {
-                FileTransport::new(path)
-                    .send(&email)
-                    .map_err(|_| AppError::InternalError {
-                        cause: "Failed to save email file".into(),
-                    })?;
-            }
-            EmailBackend::Memory { mails } => mails.lock().unwrap().push(StoredEmail {
-                to: recipient.to_string(),
-                subject: subject.into(),
-                body: body.to_string(),
-            }),
+            Transport::File => todo!(),
         }
 
         Ok(())
     }
 }
 
-impl Debug for Emails {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Emails")
-            .field("backend", &self.backend)
-            .field("from", &self.from.to_string())
-            .field("reply_to", &self.reply_to.as_ref().map(|m| m.to_string()))
-            .finish()
+pub struct Client {
+    pub(crate) from: Mailbox,
+    pub(crate) reply_to: Option<Mailbox>,
+    pub(crate) transport: Transport,
+    pub(crate) verification_url: String,
+}
+
+impl Client {
+    pub async fn send(&self, message: Message) -> Result<()> {
+        self.transport.send(message).await
     }
-}
 
-#[derive(Debug, Clone)]
-pub struct StoredEmail {
-    pub to: String,
-    pub subject: String,
-    pub body: String,
-}
+    pub fn msg_builder(&self) -> MessageBuilder {
+        let mut builder = Message::builder().from(self.from.clone());
 
-#[derive(Clone)]
-pub enum EmailBackend {
-    Smtp {
-        host: String,
-        username: String,
-        password: String,
-    },
-    FileSystem {
-        path: PathBuf,
-    },
-    Memory {
-        mails: Arc<Mutex<Vec<StoredEmail>>>,
-    },
-}
-
-impl Debug for EmailBackend {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Smtp { host, username, .. } => f
-                .debug_struct("Smtp")
-                .field("host", host)
-                .field("username", username)
-                .finish(),
-            Self::FileSystem { path } => f.debug_struct("FileSystem").field("path", path).finish(),
-            Self::Memory { mails: _ } => f.write_str("Memory"),
+        if let Some(ref reply_to) = self.reply_to {
+            builder = builder.reply_to(reply_to.clone());
         }
+
+        builder
+    }
+
+    #[instrument(skip_all, fields(self.verification_url), err)]
+    pub fn verification_url(&self, token: &str) -> Result<String, strfmt::FmtError> {
+        let mut vars = HashMap::new();
+        vars.insert("token".to_string(), token);
+        self.verification_url.format(&vars)
     }
 }
 
-pub const EMAIL_RATE_LIMIT: SlidingWindow = SlidingWindow::new("send_email", 3600, 10);
+pub async fn send_confirmation_email(
+    client: &Client,
+    to: Mailbox,
+    verification_token: &str,
+    welcome: bool,
+) -> Result<()> {
+    let subject = if welcome {
+        "Välkommen till Skolorna"
+    } else {
+        "Bekräfta din e-postadress"
+    };
+
+    let url = client
+        .verification_url(verification_token)
+        .map_err(|_| Error::internal())?;
+
+    let email = client
+        .msg_builder()
+        .to(to)
+        .subject(subject)
+        .singlepart(SinglePart::plain(formatdoc! {"
+            Klicka på länken nedan för att bekräfta din e-postadress:
+
+            {url}
+        "}))?;
+
+    client.send(email).await?;
+
+    Ok(())
+}
