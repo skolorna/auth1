@@ -24,6 +24,9 @@ pub enum Error {
 
     #[error("unauthorized")]
     Unauthorized,
+
+    #[error("password required")]
+    PasswordRequired,
 }
 
 impl Error {
@@ -32,7 +35,7 @@ impl Error {
             Self::Internal | Self::Sqlx(..) | Self::Smtp(..) | Self::Lettre(..) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
-            Self::EmailInUse => StatusCode::BAD_REQUEST,
+            Self::EmailInUse | Self::PasswordRequired => StatusCode::BAD_REQUEST,
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
         }
     }

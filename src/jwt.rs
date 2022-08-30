@@ -133,8 +133,12 @@ pub mod access_token {
 }
 
 pub mod verification_token {
-    use jsonwebtoken::{EncodingKey, Header};
+    use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation};
     use serde::{Deserialize, Serialize};
+    use sqlx::PgExecutor;
+    use uuid::Uuid;
+
+    use crate::http::Result;
 
     fn gen_secret(email: &str, password_hash: &str) -> Vec<u8> {
         let mut secret = email.as_bytes().to_vec();
@@ -145,12 +149,36 @@ pub mod verification_token {
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Claims {
         email: String,
+        sub: Uuid,
     }
 
-    pub fn sign(email: String, password_hash: &str) -> Result<String, jsonwebtoken::errors::Error> {
+    pub fn sign(
+        sub: Uuid,
+        email: String,
+        password_hash: &str,
+    ) -> Result<String, jsonwebtoken::errors::Error> {
         let key = EncodingKey::from_secret(&gen_secret(&email, password_hash));
-        let claims = Claims { email };
+        let claims = Claims { sub, email };
 
         jsonwebtoken::encode(&Header::default(), &claims, &key)
+    }
+
+    pub async fn verify(token: &str, db: impl PgExecutor<'_>) -> Result<()> {
+        let mut validation = Validation::default();
+        validation.insecure_disable_signature_validation();
+
+        let claims: Claims =
+            jsonwebtoken::decode(token, &DecodingKey::from_secret(&[0]), &validation)?.claims;
+
+        let (email, password_hash) =
+            sqlx::query_as::<_, (String, String)>("SELECT email, hash FROM users WHERE id = $1")
+                .bind(claims.sub)
+                .fetch_one(db)
+                .await?;
+        let key = DecodingKey::from_secret(&gen_secret(&email, &password_hash));
+
+        jsonwebtoken::decode::<Claims>(token, &key, &Validation::default())?;
+
+        Ok(())
     }
 }

@@ -78,7 +78,7 @@ pub fn routes() -> Router {
     Router::new().route("/", post(request_token))
 }
 
-async fn verify_password(password: String, password_hash: String) -> Result<()> {
+pub async fn verify_password(password: String, password_hash: String) -> Result<()> {
     tokio::task::spawn_blocking(move || -> Result<()> {
         let hash = PasswordHash::new(&password_hash).map_err(|_| Error::internal())?;
 

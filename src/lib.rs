@@ -24,6 +24,10 @@ pub struct Config {
 
     #[clap(env)]
     pub smtp_password: Option<String>,
+
+    /// Email verification url template. Use `{token}` in place of the token.
+    #[clap(long, env)]
+    pub verification_url: String,
 }
 
 impl Config {
@@ -49,6 +53,7 @@ impl Config {
                 .expect("failed to parse default mailbox"),
             reply_to: None,
             transport,
+            verification_url: self.verification_url.clone(),
         })
     }
 }
