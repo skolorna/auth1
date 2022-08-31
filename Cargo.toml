@@ -1,6 +1,6 @@
 [package]
 name = "auth1"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -17,7 +17,7 @@ indoc = "1.0.7"
 jsonwebtoken = "8.1.1"
 lettre = { version = "0.10.1", default-features = false, features = [
   "builder",
-  "tokio1-native-tls",
+  "tokio1-rustls-tls",
   "tracing",
   "serde",
   "smtp-transport",
@@ -28,7 +28,7 @@ rand = "0.8.5"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_with = { version = "2.0.0", features = ["base64"] }
 sqlx = { version = "0.6.1", features = [
-  "runtime-tokio-native-tls",
+  "runtime-tokio-rustls",
   "offline",
   "postgres",
   "time",
