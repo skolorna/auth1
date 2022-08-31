@@ -1,8 +1,5 @@
 use http::Result;
-use lettre::{
-    transport::smtp::authentication::{Credentials, Mechanism},
-    AsyncSmtpTransport, Tokio1Executor,
-};
+use lettre::{transport::smtp::authentication::Credentials, AsyncSmtpTransport, Tokio1Executor};
 use tracing::warn;
 
 pub mod email;
@@ -40,9 +37,7 @@ impl Config {
 
             match (self.smtp_username.as_ref(), self.smtp_password.as_ref()) {
                 (Some(username), Some(password)) => {
-                    smtp = smtp
-                        .credentials(Credentials::new(username.clone(), password.clone()))
-                        .authentication(vec![Mechanism::Plain]);
+                    smtp = smtp.credentials(Credentials::new(username.clone(), password.clone()));
                 }
                 _ => warn!("smtp credentials are missing; skipping auth"),
             }
