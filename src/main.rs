@@ -1,25 +1,23 @@
-use std::net::SocketAddr;
+use anyhow::Context;
+use auth1::{http, Config};
+use clap::Parser;
+use sqlx::postgres::PgPoolOptions;
 
-use actix_web::HttpServer;
-use auth1::{create_app, util::FromEnvironment, AppConfig};
-use dotenv::dotenv;
-use tracing::debug;
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let _ = dotenv::dotenv();
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    dotenv().ok();
     tracing_subscriber::fmt::init();
 
-    let config = AppConfig::from_env();
+    let config = Config::parse();
 
-    debug!("{:?}", config);
-
-    let addr: SocketAddr = "0.0.0.0:8000".parse().unwrap();
-
-    eprintln!("Binding {}", addr);
-
-    HttpServer::new(move || create_app!(config.clone()))
-        .bind(addr)?
-        .run()
+    let db = PgPoolOptions::new()
+        .max_connections(config.max_database_connections)
+        .connect(&config.database_url)
         .await
+        .context("failed to connect to database")?;
+
+    sqlx::migrate!().run(&db).await?;
+
+    http::serve(config, db).await
 }

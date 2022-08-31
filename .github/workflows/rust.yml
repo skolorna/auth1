@@ -7,13 +7,13 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           override: true
-      - uses: Swatinem/rust-cache@v1.3.0
+      - uses: Swatinem/rust-cache@v2
       - uses: actions-rs/cargo@v1
         with:
           command: check
@@ -39,42 +39,30 @@ jobs:
         ports:
           - 6379:6379
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: stable
           override: true
-      - uses: Swatinem/rust-cache@v1.3.0
-      - run: curl -L https://github.com/mozilla/grcov/releases/latest/download/grcov-linux-x86_64.tar.bz2 | tar jxf -
-      - run: rustup component add llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
       - uses: actions-rs/cargo@v1
         with:
           command: test
         env:
-          POSTGRES_URL: postgres://postgres:postgres@localhost/auth1
+          DATABASE_URL: postgres://postgres:postgres@localhost/auth1
           REDIS_URL: redis://localhost
-          RUSTFLAGS: "-Z instrument-coverage"
-          RUSTDOCFLAGS: "-Z instrument-coverage"
-          LLVM_PROFILE_FILE: "coverage/menu_proxy-%p-%m.profraw"
-          CARGO_HTTP_MULTIPLEXING: false # This issue is hopefully temporary
-      - run: ./grcov . -s . --binary-path ./target/debug/ -t lcov --branch --ignore-not-existing --keep-only "src/*" -o ./coverage/lcov.info
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v2
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
 
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           override: true
-      - uses: Swatinem/rust-cache@v1.3.0
+      - uses: Swatinem/rust-cache@v2
       - run: rustup component add rustfmt
       - uses: actions-rs/cargo@v1
         with:
@@ -85,13 +73,13 @@ jobs:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           override: true
-      - uses: Swatinem/rust-cache@v1.3.0
+      - uses: Swatinem/rust-cache@v2
       - run: rustup component add clippy
       - uses: actions-rs/cargo@v1
         with:

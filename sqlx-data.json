@@ -1,0 +1,229 @@
+{
+  "db": "PostgreSQL",
+  "043051ac787ed9647028d3b9c7e4b5fb54bf887fc787e1a5f5f2627d7f73c3f8": {
+    "describe": {
+      "columns": [
+        {
+          "name": "count",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "SELECT COUNT(1) FROM certificates WHERE naf > $1"
+  },
+  "6685f8c2345afb2dc758a91d303c7d4c28a4e22e57e1e46d0790e584a6d08e71": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "email",
+          "ordinal": 1,
+          "type_info": "Varchar"
+        },
+        {
+          "name": "verified",
+          "ordinal": 2,
+          "type_info": "Bool"
+        },
+        {
+          "name": "full_name",
+          "ordinal": 3,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT id, email, verified, full_name FROM users WHERE id = $1"
+  },
+  "7e49fa000b8a680098f8861fb38e617ee37d4c1271cdf704fd276b4bba9508fd": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Bytea",
+          "Text",
+          "Bytea",
+          "Timestamptz",
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "INSERT INTO certificates (id, x509, chain, key, nbf, naf) VALUES ($1, $2, $3, $4, $5, $6)"
+  },
+  "9c8c2f1aae516c5182f4c4c3c626d4c2b1f132a9bb136a79e557a7a78f3575d5": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "email",
+          "ordinal": 1,
+          "type_info": "Varchar"
+        },
+        {
+          "name": "verified",
+          "ordinal": 2,
+          "type_info": "Bool"
+        },
+        {
+          "name": "full_name",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "hash",
+          "ordinal": 4,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Varchar",
+          "Bool",
+          "Text",
+          "Text",
+          "Bytea",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "\n            UPDATE users\n            SET email = COALESCE($1, users.email),\n                verified = COALESCE($2, users.verified),\n                full_name = COALESCE($3, users.full_name),\n                hash = COALESCE($4, users.hash),\n                jwt_secret = COALESCE($5, users.jwt_secret)\n            WHERE id = $6\n            RETURNING id, email, verified, full_name, hash\n        "
+  },
+  "a5e0ae0b5ef894a187529b1c30363337978b8bc41ff6c9c4efa3c0ec864abed2": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "key",
+          "ordinal": 1,
+          "type_info": "Bytea"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "SELECT id, key FROM certificates WHERE naf > $1 ORDER BY naf ASC"
+  },
+  "b6fc69961ede0cec16ee6dc1ef454a73b0ad6dd92ce265c2ebff7eb7e6b6d6db": {
+    "describe": {
+      "columns": [
+        {
+          "name": "hash",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT hash FROM users WHERE id = $1"
+  },
+  "c8b7ee30b04a561d12ec7a5a67d70231877664ebe0c3d0b96a447a9c272dd81e": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Varchar",
+          "Text",
+          "Text",
+          "Bytea"
+        ]
+      }
+    },
+    "query": "INSERT INTO users (id, email, full_name, hash, jwt_secret) VALUES ($1, $2, $3, $4, $5)"
+  },
+  "d65e3e39fe153b8bb323030c970bcdec74d7aa82427e2f083631f1dc3e28258e": {
+    "describe": {
+      "columns": [
+        {
+          "name": "x509",
+          "ordinal": 0,
+          "type_info": "Bytea"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT x509 FROM certificates WHERE id = $1"
+  },
+  "f467aff95ef5ca0bae0f063d73838c35d672b83acb7897d87b61eef900ccccbd": {
+    "describe": {
+      "columns": [
+        {
+          "name": "email",
+          "ordinal": 0,
+          "type_info": "Varchar"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT email FROM users WHERE id = $1"
+  }
+}
