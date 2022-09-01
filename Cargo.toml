@@ -9,7 +9,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.62"
+anyhow = "1.0.63"
 argon2 = "0.4.1"
 auth1-sdk = { version = "0.1.0", path = "sdk", features = ["openssl"] }
 axum = { version = "0.5.15", features = ["headers"] }
