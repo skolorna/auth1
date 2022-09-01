@@ -1,5 +1,7 @@
 *
 !/src
+!/jwk
+!/sdk
 !/migrations
 !/build.rs
 !/sqlx-data.json

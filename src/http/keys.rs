@@ -2,30 +2,23 @@ use std::iter;
 
 use axum::{response::IntoResponse, routing::get, Extension, Json, Router};
 use futures::TryStreamExt;
+use jwk::{Jwk, X509Ext};
 use openssl::x509::X509;
-use serde::Serialize;
-
 use time::Duration;
 use uuid::Uuid;
 
-use crate::{
-    jwk::{Jwk, X509Ext},
-    x509,
-};
+use crate::x509;
 
 use super::{ApiContext, Error, Result};
-
-#[derive(Debug, Serialize)]
-struct JwkSet {
-    keys: Vec<Jwk>,
-}
 
 const JWKS_CACHE_TTL: Duration = Duration::seconds(15);
 
 async fn list(ctx: Extension<ApiContext>) -> Result<impl IntoResponse> {
     let mut conn = ctx.db.acquire().await?;
 
-    ctx.ca.sig_key_foresight(&mut conn, JWKS_CACHE_TTL).await?;
+    ctx.ca
+        .sig_key_foresight(&mut conn, JWKS_CACHE_TTL * 2)
+        .await?;
 
     let keys = sqlx::query_as::<_, (Uuid, Vec<u8>, x509::Chain)>(
         "SELECT id, x509, chain FROM certificates WHERE naf > NOW()",
@@ -53,7 +46,7 @@ async fn list(ctx: Extension<ApiContext>) -> Result<impl IntoResponse> {
                 JWKS_CACHE_TTL.whole_seconds()
             ),
         )],
-        Json(JwkSet { keys }),
+        Json(jwk::Set { keys }),
     ))
 }
 
