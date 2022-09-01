@@ -16,7 +16,7 @@ axum = { version = "0.5.15", features = ["headers"] }
 base64 = "0.13.0"
 clap = { version = "3.2.17", features = ["derive", "env"] }
 dotenv = "0.15.0"
-futures = "0.3.23"
+futures = "0.3.24"
 indoc = "1.0.7"
 jsonwebtoken = "8.1.1"
 jwk = { version = "0.1.0", path = "jwk" }
