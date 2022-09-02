@@ -1,6 +1,9 @@
+[workspace]
+members = [".", "jwk", "sdk"]
+
 [package]
 name = "auth1"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -8,6 +11,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.62"
 argon2 = "0.4.1"
+auth1-sdk = { version = "0.1.0", path = "sdk", features = ["openssl"] }
 axum = { version = "0.5.15", features = ["headers"] }
 base64 = "0.13.0"
 clap = { version = "3.2.17", features = ["derive", "env"] }
@@ -15,9 +19,10 @@ dotenv = "0.15.0"
 futures = "0.3.23"
 indoc = "1.0.7"
 jsonwebtoken = "8.1.1"
+jwk = { version = "0.1.0", path = "jwk" }
 lettre = { version = "0.10.1", default-features = false, features = [
   "builder",
-  "tokio1-native-tls",
+  "tokio1-rustls-tls",
   "tracing",
   "serde",
   "smtp-transport",
@@ -26,9 +31,8 @@ lettre = { version = "0.10.1", default-features = false, features = [
 openssl = "0.10.41"
 rand = "0.8.5"
 serde = { version = "1.0.144", features = ["derive"] }
-serde_with = { version = "2.0.0", features = ["base64"] }
 sqlx = { version = "0.6.1", features = [
-  "runtime-tokio-native-tls",
+  "runtime-tokio-rustls",
   "offline",
   "postgres",
   "time",
@@ -38,6 +42,7 @@ strfmt = "0.2.2"
 thiserror = "1.0.32"
 time = "0.3.13"
 tokio = { version = "1.20.1", features = ["full"] }
+tower-http = { version = "0.3.4", features = ["cors", "trace"] }
 tracing = "0.1.36"
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
 uuid = { version = "1.1.2", features = ["v4", "serde"] }

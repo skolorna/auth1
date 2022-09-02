@@ -4,6 +4,7 @@ use axum::{response::IntoResponse, routing::get, Extension, Json, Router};
 use serde::Serialize;
 use sqlx::PgPool;
 use std::{net::SocketAddr, sync::Arc};
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 use crate::{email, x509, Config};
 
@@ -49,6 +50,8 @@ pub fn app(db: PgPool, email: email::Client, ca: x509::Authority) -> Router {
             email: Arc::new(email),
             ca: Arc::new(ca),
         }))
+        .layer(TraceLayer::new_for_http())
+        .layer(CorsLayer::very_permissive())
 }
 
 #[derive(Debug, Serialize)]

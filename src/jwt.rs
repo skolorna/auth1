@@ -67,7 +67,6 @@ pub mod refresh_token {
 pub mod access_token {
     use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
     use openssl::x509::X509;
-    use serde::{Deserialize, Serialize};
     use sqlx::{PgConnection, PgExecutor};
     use time::{Duration, OffsetDateTime};
     use tracing::instrument;
@@ -81,12 +80,7 @@ pub mod access_token {
     pub const ALG: Algorithm = Algorithm::ES256;
     pub const TTL: Duration = Duration::minutes(10);
 
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct Claims {
-        pub sub: Uuid,
-        pub iat: i64,
-        pub exp: i64,
-    }
+    pub type Claims = auth1_sdk::AccessTokenClaims;
 
     #[instrument(skip_all)]
     pub async fn sign(sub: Uuid, ca: &x509::Authority, db: &mut PgConnection) -> Result<String> {

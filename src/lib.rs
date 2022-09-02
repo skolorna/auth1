@@ -4,7 +4,6 @@ use tracing::warn;
 
 pub mod email;
 pub mod http;
-pub mod jwk;
 pub mod jwt;
 pub mod x509;
 
