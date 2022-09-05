@@ -7,6 +7,7 @@ use axum::{
 use lettre::{message::Mailbox, Address};
 use serde::{Deserialize, Serialize};
 
+use tracing::instrument;
 use uuid::Uuid;
 
 use super::{
@@ -35,6 +36,7 @@ struct UserJson {
     verified: bool,
 }
 
+#[instrument(skip_all)]
 async fn register(
     ctx: Extension<ApiContext>,
     Json(req): Json<NewUser>,
@@ -80,6 +82,7 @@ async fn register(
     }))
 }
 
+#[instrument(skip_all)]
 async fn get_current_user(
     ctx: Extension<ApiContext>,
     identity: Identity,
@@ -109,6 +112,7 @@ impl UpdateUser {
     }
 }
 
+#[instrument(skip_all)]
 async fn update_user(
     ctx: Extension<ApiContext>,
     identity: Identity,

@@ -4,6 +4,7 @@ pub mod refresh_token {
     use serde::{Deserialize, Serialize};
     use sqlx::PgExecutor;
     use time::{Duration, OffsetDateTime};
+    use tracing::instrument;
     use uuid::Uuid;
 
     use crate::http::{Error, Result};
@@ -25,6 +26,7 @@ pub mod refresh_token {
         pub exp: i64,
     }
 
+    #[instrument(skip(secret))]
     pub fn sign(sub: Uuid, secret: &[u8]) -> Result<String, jsonwebtoken::errors::Error> {
         let header = Header {
             typ: Some("JWT".into()),
@@ -43,6 +45,7 @@ pub mod refresh_token {
         jsonwebtoken::encode(&header, &claims, &key)
     }
 
+    #[instrument(skip(db))]
     pub async fn verify(token: &str, db: impl PgExecutor<'_>) -> Result<Claims> {
         let claims: Claims = {
             let mut validation = Validation::default();
@@ -82,7 +85,7 @@ pub mod access_token {
 
     pub type Claims = auth1_sdk::AccessTokenClaims;
 
-    #[instrument(skip_all)]
+    #[instrument(skip(ca, db))]
     pub async fn sign(sub: Uuid, ca: &x509::Authority, db: &mut PgConnection) -> Result<String> {
         let (kid, key) = ca.get_sig_key(db).await?;
         let key = EncodingKey::from_ec_pem(&key)?;
@@ -104,6 +107,7 @@ pub mod access_token {
         Ok(jsonwebtoken::encode(&header, &claims, &key)?)
     }
 
+    #[instrument(skip(db))]
     pub async fn verify(token: &str, db: impl PgExecutor<'_>) -> Result<Claims> {
         let header = jsonwebtoken::decode_header(token)?;
         let kid: Uuid = header
@@ -130,6 +134,7 @@ pub mod verification_token {
     use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation};
     use serde::{Deserialize, Serialize};
     use sqlx::PgExecutor;
+    use tracing::instrument;
     use uuid::Uuid;
 
     use crate::http::Result;
@@ -157,6 +162,7 @@ pub mod verification_token {
         jsonwebtoken::encode(&Header::default(), &claims, &key)
     }
 
+    #[instrument(skip(db))]
     pub async fn verify(token: &str, db: impl PgExecutor<'_>) -> Result<()> {
         let mut validation = Validation::default();
         validation.insecure_disable_signature_validation();

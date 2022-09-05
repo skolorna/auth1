@@ -3,7 +3,7 @@ members = [".", "jwk", "sdk"]
 
 [package]
 name = "auth1"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -30,6 +30,9 @@ lettre = { version = "0.10.1", default-features = false, features = [
 ] }
 openssl = "0.10.41"
 rand = "0.8.5"
+sentry = "0.27.0"
+sentry-tower = { version = "0.27.0", features = ["http"] }
+sentry-tracing = "0.27.0"
 serde = { version = "1.0.144", features = ["derive"] }
 sqlx = { version = "0.6.1", features = [
   "runtime-tokio-rustls",

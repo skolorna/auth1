@@ -1,5 +1,6 @@
 use http::Result;
 use lettre::{transport::smtp::authentication::Credentials, AsyncSmtpTransport, Tokio1Executor};
+use sentry::types::Dsn;
 use tracing::warn;
 
 pub mod email;
@@ -27,6 +28,15 @@ pub struct Config {
     /// Email verification url template. Use `{token}` in place of the token.
     #[clap(long, env)]
     pub verification_url: String,
+
+    #[clap(env)]
+    pub sentry_dsn: Option<Dsn>,
+
+    #[clap(env)]
+    pub sentry_environment: Option<String>,
+
+    #[clap(env)]
+    pub traces_sample_rate: Option<f32>,
 }
 
 impl Config {

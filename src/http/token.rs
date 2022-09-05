@@ -1,6 +1,7 @@
 use argon2::{Argon2, PasswordHash};
 use axum::{response::IntoResponse, routing::post, Extension, Form, Json, Router};
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 use uuid::Uuid;
 
 use crate::jwt::{access_token, refresh_token};
@@ -34,6 +35,7 @@ pub enum TokenType {
     Bearer,
 }
 
+#[instrument(skip_all)]
 async fn request_token(
     ctx: Extension<ApiContext>,
     Form(req): Form<TokenRequest>,

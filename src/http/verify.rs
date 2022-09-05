@@ -1,5 +1,6 @@
 use axum::{response::IntoResponse, routing::post, Extension, Json, Router};
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 
 use crate::jwt::verification_token;
 
@@ -10,6 +11,7 @@ struct VerifyRequest {
     token: String,
 }
 
+#[instrument(skip_all)]
 async fn verify(
     ctx: Extension<ApiContext>,
     Json(req): Json<VerifyRequest>,

@@ -40,6 +40,8 @@ pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
 
 pub fn app(db: PgPool, email: email::Client, ca: x509::Authority) -> Router {
     Router::new()
+        .layer(sentry_tower::NewSentryLayer::new_from_top())
+        .layer(sentry_tower::SentryHttpLayer::with_transaction())
         .route("/health", get(health))
         .nest("/users", users::routes())
         .nest("/keys", keys::routes())

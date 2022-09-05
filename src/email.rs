@@ -57,6 +57,7 @@ impl Client {
     }
 }
 
+#[instrument(skip(client, verification_token))]
 pub async fn send_confirmation_email(
     client: &Client,
     to: Mailbox,
