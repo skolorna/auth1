@@ -21,6 +21,7 @@ use sqlx::{
     Connection, PgConnection, Postgres,
 };
 use time::{Duration, OffsetDateTime};
+use tracing::{debug, instrument};
 use uuid::Uuid;
 
 use crate::{
@@ -184,6 +185,7 @@ impl Authority {
         })
     }
 
+    #[instrument(skip_all)]
     async fn gen_insert_leaf(&self, db: &mut PgConnection) -> Result<(Uuid, Vec<u8>)> {
         let authority = self.clone();
         let cert = tokio::task::spawn_blocking(move || authority.gen_leaf())
@@ -214,6 +216,7 @@ impl Authority {
         .await?;
 
         if let Some(record) = record {
+            debug!("found a valid certificate");
             return Ok((record.id, record.key));
         }
 
@@ -226,6 +229,7 @@ impl Authority {
     /// needed for access token generation, in order to make sure caches are up-to-date.
     ///
     /// `foresight` is the amount of time *in addition to* the access token TTL.
+    #[instrument(skip(self, db))]
     pub async fn sig_key_foresight(
         &self,
         db: &mut PgConnection,
@@ -241,6 +245,8 @@ impl Authority {
         .await?;
 
         if record.count.unwrap_or_default() < 1 {
+            debug!("no up-to-date certificates found");
+
             self.gen_insert_leaf(&mut tx).await?;
         }
 

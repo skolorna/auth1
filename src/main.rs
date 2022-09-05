@@ -2,14 +2,25 @@ use anyhow::Context;
 use auth1::{http, Config};
 use clap::Parser;
 use sqlx::postgres::PgPoolOptions;
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let _ = dotenv::dotenv();
 
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::registry()
+        .with(fmt::layer().with_filter(EnvFilter::from_default_env()))
+        .with(sentry_tracing::layer())
+        .init();
 
     let config = Config::parse();
+
+    let _guard = sentry::init(sentry::ClientOptions {
+        traces_sample_rate: config.traces_sample_rate.unwrap_or(1.0),
+        dsn: config.sentry_dsn.clone(),
+        environment: config.sentry_environment.clone().map(Into::into),
+        ..Default::default()
+    });
 
     let db = PgPoolOptions::new()
         .max_connections(config.max_database_connections)
