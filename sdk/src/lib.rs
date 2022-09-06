@@ -3,12 +3,16 @@ use std::{sync::Arc, time::Duration};
 use cache_control::CacheControl;
 use jsonwebtoken::Validation;
 use jwk::Jwk;
-use reqwest::{IntoUrl, Url};
+use reqwest::{Client, IntoUrl, Url};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, time::Instant};
 use uuid::Uuid;
 
+#[cfg(feature = "actix")]
+pub mod actix;
+
 pub const JWKS_URL: &str = "https://api-staging.skolorna.com/v0/auth/keys";
+pub const TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -30,6 +34,10 @@ pub enum Error {
 
 type Result<T, E = Error> = core::result::Result<T, E>;
 
+pub struct Identity {
+    pub claims: AccessTokenClaims,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccessTokenClaims {
     pub sub: Uuid,
@@ -37,10 +45,12 @@ pub struct AccessTokenClaims {
     pub exp: i64,
 }
 
+/// A caching JWT key store.
 #[derive(Clone)]
 pub struct KeyStore {
     jwks_url: Url,
     cache: Arc<RwLock<Option<(Instant, jwk::Set)>>>,
+    client: Client,
 }
 
 impl KeyStore {
@@ -48,6 +58,7 @@ impl KeyStore {
         Ok(Self {
             jwks_url: jwks_url.into_url()?,
             cache: Arc::new(RwLock::new(None)),
+            client: Client::builder().timeout(TIMEOUT).build()?,
         })
     }
 
@@ -64,7 +75,7 @@ impl KeyStore {
 
         let mut writer = self.cache.write().await;
 
-        let res = reqwest::get(self.jwks_url.clone()).await?;
+        let res = self.client.get(self.jwks_url.clone()).send().await?;
 
         let headers = res.headers();
 
