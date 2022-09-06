@@ -53,6 +53,12 @@ pub struct KeyStore {
     client: Client,
 }
 
+impl Default for KeyStore {
+    fn default() -> Self {
+        Self::new(JWKS_URL).unwrap()
+    }
+}
+
 impl KeyStore {
     pub fn new(jwks_url: impl IntoUrl) -> Result<Self, Error> {
         Ok(Self {
