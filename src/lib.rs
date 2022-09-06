@@ -13,7 +13,7 @@ pub struct Config {
     #[clap(long, env)]
     pub database_url: String,
 
-    #[clap(long, env, default_value = "50")]
+    #[clap(long, env, default_value = "10")]
     pub max_database_connections: u32,
 
     #[clap(env)]

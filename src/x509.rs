@@ -248,6 +248,8 @@ impl Authority {
             debug!("no up-to-date certificates found");
 
             self.gen_insert_leaf(&mut tx).await?;
+        } else {
+            debug!("found valid certificate");
         }
 
         tx.commit().await?;

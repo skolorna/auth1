@@ -5,6 +5,8 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, TypedHeader,
 };
+use sentry::configure_scope;
+use tracing::debug;
 
 use crate::{http::ApiContext, jwt::access_token};
 
@@ -31,6 +33,15 @@ where
         let claims = access_token::verify(authorization.token(), &ctx.db)
             .await
             .map_err(IntoResponse::into_response)?;
+
+        debug!(uid=%claims.sub, "authenticated user by access token");
+
+        configure_scope(|scope| {
+            scope.set_user(Some(sentry::User {
+                id: Some(claims.sub.to_string()),
+                ..Default::default()
+            }));
+        });
 
         Ok(Identity { claims })
     }
