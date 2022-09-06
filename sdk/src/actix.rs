@@ -2,10 +2,18 @@ use actix_web::{dev::Payload, FromRequest, HttpRequest, ResponseError};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use futures_core::future::LocalBoxFuture;
 use futures_util::{future, FutureExt};
+use reqwest::StatusCode;
 
 use crate::{Error, Identity, KeyStore};
 
-impl ResponseError for Error {}
+impl ResponseError for Error {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            Error::Jwk(_) | Error::Reqwest(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::KeyNotFound | Error::MalformedToken | Error::Jwt(_) => StatusCode::UNAUTHORIZED,
+        }
+    }
+}
 
 impl FromRequest for Identity {
     type Error = Error;
