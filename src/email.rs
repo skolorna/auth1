@@ -7,7 +7,7 @@ use lettre::{
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
 use strfmt::Format;
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 pub enum Transport {
     Smtp(AsyncSmtpTransport<Tokio1Executor>),
@@ -36,6 +36,8 @@ pub struct Client {
 
 impl Client {
     pub async fn send(&self, message: Message) -> Result<()> {
+        debug!("sending email");
+
         self.transport.send(message).await
     }
 
