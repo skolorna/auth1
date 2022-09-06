@@ -161,8 +161,6 @@ impl Key {
         let der_b64 = ::base64::encode(self.to_der()?);
         let mut pem = Vec::new();
 
-        println!("{}", der_b64);
-
         writeln!(&mut pem, "-----BEGIN PUBLIC KEY-----").unwrap();
 
         const MAX_LINE_LEN: usize = 64;
