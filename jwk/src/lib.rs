@@ -6,25 +6,15 @@ use openssl::bn::BigNumContext;
 use openssl::ec::{EcKeyRef, PointConversionForm};
 use openssl::error::ErrorStack;
 use openssl::nid::Nid;
-use openssl::{hash::MessageDigest, pkey::Public, rsa::RsaRef, x509::X509};
+use openssl::{hash::MessageDigest, pkey::Public, x509::X509};
 use serde::{Deserialize, Serialize};
 use serde_with::formats::Unpadded;
 use serde_with::{
     base64::{self, Base64},
     serde_as,
 };
+use std::convert::TryInto;
 use std::io::Write;
-
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("der error")]
-    Der,
-
-    #[error("jwt error: {0}")]
-    Jwt(#[from] jsonwebtoken::errors::Error),
-}
-
-type Result<T, E = Error> = core::result::Result<T, E>;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Set {
@@ -32,6 +22,7 @@ pub struct Set {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]
 pub struct Jwk {
     #[serde(default, rename = "alg", skip_serializing_if = "Option::is_none")]
     pub algorithm: Option<Algorithm>,
@@ -50,6 +41,7 @@ pub struct Jwk {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]
 pub enum Algorithm {
     RS256,
     ES256,
@@ -68,31 +60,19 @@ impl From<Algorithm> for jsonwebtoken::Algorithm {
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]
 #[serde(tag = "kty")]
 pub enum Key {
-    RSA {
-        #[serde_as(as = "Base64<base64::UrlSafe, Unpadded>")]
-        e: Vec<u8>,
-        #[serde_as(as = "Base64<base64::UrlSafe, Unpadded>")]
-        n: Vec<u8>,
-    },
     EC {
         crv: Curve,
         #[serde_as(as = "Base64<base64::UrlSafe, Unpadded>")]
-        x: Vec<u8>,
+        x: [u8; 32],
         #[serde_as(as = "Base64<base64::UrlSafe, Unpadded>")]
-        y: Vec<u8>,
+        y: [u8; 32],
     },
 }
 
 impl Key {
-    pub fn from_rsa(key: &RsaRef<Public>) -> Self {
-        Self::RSA {
-            e: key.e().to_vec(),
-            n: key.n().to_vec(),
-        }
-    }
-
     pub fn from_ec(key: &EcKeyRef<Public>) -> Result<Self, ErrorStack> {
         match key.group().curve_name() {
             Some(Nid::X9_62_PRIME256V1) => {
@@ -106,15 +86,15 @@ impl Key {
                 let (x, y) = pk_bytes[1..].split_at(32);
                 Ok(Self::EC {
                     crv: Curve::P256,
-                    x: x.to_vec(),
-                    y: y.to_vec(),
+                    x: x.try_into().unwrap(),
+                    y: y.try_into().unwrap(),
                 })
             }
             _ => unimplemented!(),
         }
     }
 
-    pub fn to_der(&self) -> Result<Vec<u8>> {
+    pub fn to_der(&self) -> Vec<u8> {
         #[derive(Debug, Sequence, Clone, Copy, PartialEq, Eq)]
         struct AlgorithmIdentifier<'a> {
             pub algorithm: ObjectIdentifier,
@@ -122,7 +102,6 @@ impl Key {
         }
 
         match self {
-            Key::RSA { .. } => todo!(),
             Key::EC { crv, x, y } => {
                 let curve_oid = match crv {
                     Curve::P256 => ObjectIdentifier::new_unwrap("1.2.840.10045.3.1.7"),
@@ -149,16 +128,14 @@ impl Key {
                 };
 
                 let mut out = Vec::new();
-
-                key.encode_to_vec(&mut out).map_err(|_| Error::Der)?;
-
-                Ok(out)
+                key.encode_to_vec(&mut out).unwrap();
+                out
             }
         }
     }
 
-    pub fn to_pem(&self) -> Result<Vec<u8>> {
-        let der_b64 = ::base64::encode(self.to_der()?);
+    pub fn to_pem(&self) -> Vec<u8> {
+        let der_b64 = ::base64::encode(self.to_der());
         let mut pem = Vec::new();
 
         writeln!(&mut pem, "-----BEGIN PUBLIC KEY-----").unwrap();
@@ -171,26 +148,27 @@ impl Key {
 
         writeln!(&mut pem, "-----END PUBLIC KEY-----").unwrap();
 
-        Ok(pem)
+        pem
     }
 
-    pub fn to_jwt_key(&self) -> Result<DecodingKey> {
-        let pem = self.to_pem()?;
+    pub fn to_jwt_key(&self) -> DecodingKey {
+        let pem = self.to_pem();
 
         match self {
-            Key::RSA { .. } => Ok(DecodingKey::from_rsa_pem(&pem)?),
-            Key::EC { .. } => Ok(DecodingKey::from_ec_pem(&pem)?),
+            Key::EC { .. } => DecodingKey::from_ec_pem(&pem).unwrap(),
         }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]
 pub enum Curve {
     #[serde(rename = "P-256")]
     P256,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]
 pub enum KeyUse {
     #[serde(rename = "sig")]
     Signing,
@@ -200,6 +178,7 @@ pub enum KeyUse {
 
 #[serde_as]
 #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]
 pub struct X509Params {
     #[serde(default, rename = "x5c", skip_serializing_if = "Option::is_none")]
     #[serde_as(as = "Option<Vec<Base64>>")]

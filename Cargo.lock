@@ -228,6 +228,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1485d4d2cc45e7b201ee3767015c96faa5904387c9d87c6efdd0fb511f12d305"
 
 [[package]]
+name = "arbitrary"
+version = "1.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f44124848854b941eafdb34f05b3bcf59472f643c7e151eba7c2b69daa469ed5"
+dependencies = [
+ "derive_arbitrary",
+]
+
+[[package]]
 name = "argon2"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -304,22 +313,24 @@ dependencies = [
 
 [[package]]
 name = "auth1-sdk"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "actix-web",
  "actix-web-httpauth",
+ "axum",
  "cache_control",
  "futures-core",
  "futures-util",
+ "http",
  "jsonwebtoken",
  "jwk",
- "openssl",
  "reqwest",
  "serde",
  "serde_with",
  "thiserror",
  "time",
  "tokio",
+ "tracing",
  "uuid",
 ]
 
@@ -667,6 +678,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "180e0925824edd2cc2de26da32852c7cd30844011dbf4956c12c88ad2f42d910"
 dependencies = [
  "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "derive_arbitrary"
+version = "1.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "226ad66541d865d7a7173ad6a9e691c33fdb910ac723f4bc734b3e5294a1f931"
+dependencies = [
  "proc-macro2",
  "quote",
  "syn",
@@ -1240,13 +1262,13 @@ dependencies = [
 name = "jwk"
 version = "0.1.0"
 dependencies = [
+ "arbitrary",
  "base64",
  "der",
  "jsonwebtoken",
  "openssl",
  "serde",
  "serde_with",
- "thiserror",
 ]
 
 [[package]]

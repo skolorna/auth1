@@ -11,7 +11,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.62"
 argon2 = "0.4.1"
-auth1-sdk = { version = "0.1.0", path = "sdk", features = ["openssl"] }
+auth1-sdk = { version = "0.1.0", path = "sdk" }
 axum = { version = "0.5.15", features = ["headers"] }
 base64 = "0.13.0"
 clap = { version = "3.2.17", features = ["derive", "env"] }
