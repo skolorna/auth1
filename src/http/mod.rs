@@ -4,6 +4,7 @@ use axum::{response::IntoResponse, routing::get, Extension, Json, Router};
 use serde::Serialize;
 use sqlx::PgPool;
 use std::{net::SocketAddr, sync::Arc};
+use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 use crate::{email, x509, Config};
@@ -39,9 +40,12 @@ pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
 }
 
 pub fn app(db: PgPool, email: email::Client, ca: x509::Authority) -> Router {
-    Router::new()
+    let trace = ServiceBuilder::new()
         .layer(sentry_tower::NewSentryLayer::new_from_top())
         .layer(sentry_tower::SentryHttpLayer::with_transaction())
+        .layer(TraceLayer::new_for_http());
+
+    Router::new()
         .route("/health", get(health))
         .nest("/users", users::routes())
         .nest("/keys", keys::routes())
@@ -52,8 +56,8 @@ pub fn app(db: PgPool, email: email::Client, ca: x509::Authority) -> Router {
             email: Arc::new(email),
             ca: Arc::new(ca),
         }))
-        .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::very_permissive())
+        .layer(trace)
 }
 
 #[derive(Debug, Serialize)]

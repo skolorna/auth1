@@ -1,38 +1,43 @@
+use std::fmt::Display;
+
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use sqlx::error::DatabaseError;
 use tracing::error;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum Error {
-    #[error("an internal error occurred")]
     Internal,
-
-    #[error("database error: {0}")]
-    Sqlx(#[from] sqlx::Error),
-
-    #[error("email error")]
-    Lettre(#[from] lettre::error::Error),
-
-    #[error("smtp error")]
-    Smtp(#[from] lettre::transport::smtp::Error),
-
-    #[error("email is already in use")]
+    Sqlx(sqlx::Error),
+    Lettre(lettre::error::Error),
+    Smtp(lettre::transport::smtp::Error),
     EmailInUse,
-
-    #[error("unauthorized")]
     Unauthorized,
-
-    #[error("password required")]
     PasswordRequired,
 }
 
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let msg = match self {
+            Error::Internal | Error::Sqlx(_) | Error::Lettre(_) | Error::Smtp(_) => {
+                "an internal error occurred"
+            }
+            Error::EmailInUse => "email already in use",
+            Error::Unauthorized => "unauthorized",
+            Error::PasswordRequired => "password required",
+        };
+
+        f.write_str(msg)
+    }
+}
+
+impl std::error::Error for Error {}
+
 impl Error {
-    pub fn status_code(&self) -> StatusCode {
+    pub const fn status_code(&self) -> StatusCode {
         match self {
-            Self::Internal | Self::Sqlx(..) | Self::Smtp(..) | Self::Lettre(..) => {
+            Self::Internal | Self::Sqlx(_) | Self::Lettre(_) | Self::Smtp(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             Self::EmailInUse | Self::PasswordRequired => StatusCode::BAD_REQUEST,
@@ -46,6 +51,10 @@ impl Error {
 
     pub const fn user_not_found() -> Self {
         Self::Unauthorized
+    }
+
+    pub const fn email_in_use() -> Self {
+        Self::EmailInUse
     }
 }
 
@@ -67,7 +76,10 @@ impl From<jsonwebtoken::errors::Error> for Error {
             | ErrorKind::Json(_)
             | ErrorKind::Utf8(_)
             | ErrorKind::InvalidSignature => Self::Unauthorized,
-            _ => Self::Internal,
+            _ => {
+                error!("jwt error: {e}");
+                Self::Internal
+            }
         }
     }
 }
@@ -79,34 +91,29 @@ impl From<openssl::error::ErrorStack> for Error {
     }
 }
 
-impl IntoResponse for Error {
-    fn into_response(self) -> Response {
-        (self.status_code(), self.to_string()).into_response()
+impl From<sqlx::Error> for Error {
+    fn from(e: sqlx::Error) -> Self {
+        error!("sqlx error: {e}");
+        Error::Sqlx(e)
     }
 }
 
-pub trait SqlxResultExt<T> {
-    fn on_constraint(
-        self,
-        name: &str,
-        f: impl FnOnce(Box<dyn DatabaseError>) -> Error,
-    ) -> Result<T, Error>;
+impl From<lettre::error::Error> for Error {
+    fn from(e: lettre::error::Error) -> Self {
+        error!("lettre error: {e}");
+        Error::Lettre(e)
+    }
 }
 
-impl<T, E> SqlxResultExt<T> for Result<T, E>
-where
-    E: Into<Error>,
-{
-    fn on_constraint(
-        self,
-        name: &str,
-        map_err: impl FnOnce(Box<dyn DatabaseError>) -> Error,
-    ) -> Result<T, Error> {
-        self.map_err(|e| match e.into() {
-            Error::Sqlx(sqlx::Error::Database(dbe)) if dbe.constraint() == Some(name) => {
-                map_err(dbe)
-            }
-            e => e,
-        })
+impl From<lettre::transport::smtp::Error> for Error {
+    fn from(e: lettre::transport::smtp::Error) -> Self {
+        error!("smtp error: {e}");
+        Error::Smtp(e)
+    }
+}
+
+impl IntoResponse for Error {
+    fn into_response(self) -> Response {
+        (self.status_code(), self.to_string()).into_response()
     }
 }
