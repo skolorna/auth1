@@ -11,7 +11,6 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use super::{
-    error::SqlxResultExt,
     extract::Identity,
     token::{verify_password, TokenResponse, TokenType},
     ApiContext, Error, Result,
@@ -44,11 +43,8 @@ async fn register(
     let password_hash = hash_password(req.password).await?;
     let uid = Uuid::new_v4();
     let jwt_secret = refresh_token::gen_secret();
-    let refresh_token = refresh_token::sign(uid, &jwt_secret)?;
 
     let mut tx = ctx.db.begin().await?;
-
-    let access_token = access_token::sign(uid, &ctx.ca, &mut tx).await?;
 
     sqlx::query!(
         r#"INSERT INTO users (id, email, full_name, hash, jwt_secret) VALUES ($1, $2, $3, $4, $5)"#,
@@ -60,8 +56,15 @@ async fn register(
     )
     .execute(&mut tx)
     .await
-    .on_constraint("users_email_key", |_| Error::EmailInUse)?;
+    .map_err(|e| match e {
+        sqlx::Error::Database(dbe) if dbe.constraint() == Some("users_email_key") => {
+            Error::email_in_use()
+        }
+        e => e.into(),
+    })?;
 
+    let refresh_token = refresh_token::sign(uid, &jwt_secret)?;
+    let access_token = access_token::sign(uid, &ctx.ca, &mut tx).await?;
     let verification_token = verification_token::sign(uid, req.email.to_string(), &password_hash)?;
 
     send_confirmation_email(
@@ -180,7 +183,12 @@ async fn update_user(
     )
     .fetch_one(&mut tx)
     .await
-    .on_constraint("user_email_key", |_| Error::EmailInUse)?;
+    .map_err(|e| match e {
+        sqlx::Error::Database(dbe) if dbe.constraint() == Some("users_email_key") => {
+            Error::email_in_use()
+        }
+        e => e.into(),
+    })?;
 
     if updated_email {
         send_confirmation_email(

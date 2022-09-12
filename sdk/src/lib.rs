@@ -3,32 +3,31 @@ use std::{sync::Arc, time::Duration};
 use cache_control::CacheControl;
 use jsonwebtoken::Validation;
 use jwk::Jwk;
-use reqwest::{IntoUrl, Url};
+use reqwest::{Client, IntoUrl, Url};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, time::Instant};
+#[cfg(feature = "tracing")]
+use tracing::debug;
 use uuid::Uuid;
 
+#[cfg(feature = "actix")]
+pub mod actix;
+
+#[cfg(feature = "axum")]
+pub mod axum;
+
+mod error;
+
+pub use error::*;
+
 pub const JWKS_URL: &str = "https://api-staging.skolorna.com/v0/auth/keys";
-
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("jwk error: {0}")]
-    Jwk(#[from] jwk::Error),
-
-    #[error("reqwest error: {0}")]
-    Reqwest(#[from] reqwest::Error),
-
-    #[error("key not found")]
-    KeyNotFound,
-
-    #[error("malformed token")]
-    MalformedToken,
-
-    #[error("jwt error: {0}")]
-    Jwt(#[from] jsonwebtoken::errors::Error),
-}
+pub const TIMEOUT: Duration = Duration::from_secs(5);
 
 type Result<T, E = Error> = core::result::Result<T, E>;
+
+pub struct Identity {
+    pub claims: AccessTokenClaims,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccessTokenClaims {
@@ -37,10 +36,36 @@ pub struct AccessTokenClaims {
     pub exp: i64,
 }
 
+struct CacheEntry {
+    expires: Instant,
+    inner: jwk::Set,
+}
+
+impl CacheEntry {
+    const fn new(expires: Instant, value: jwk::Set) -> Self {
+        Self {
+            expires,
+            inner: value,
+        }
+    }
+
+    fn is_fresh(&self) -> bool {
+        self.expires.elapsed().is_zero()
+    }
+}
+
+/// A caching JWT key store.
 #[derive(Clone)]
 pub struct KeyStore {
     jwks_url: Url,
-    cache: Arc<RwLock<Option<(Instant, jwk::Set)>>>,
+    cache: Arc<RwLock<Option<CacheEntry>>>,
+    client: Client,
+}
+
+impl Default for KeyStore {
+    fn default() -> Self {
+        Self::new(JWKS_URL).unwrap()
+    }
 }
 
 impl KeyStore {
@@ -48,15 +73,16 @@ impl KeyStore {
         Ok(Self {
             jwks_url: jwks_url.into_url()?,
             cache: Arc::new(RwLock::new(None)),
+            client: Client::builder().timeout(TIMEOUT).build()?,
         })
     }
 
     pub async fn jwks(&self) -> Result<jwk::Set> {
         let reader = self.cache.read().await;
 
-        if let Some((exp, cached)) = reader.as_ref() {
-            if exp.elapsed().is_zero() {
-                return Ok(cached.clone());
+        if let Some(entry) = reader.as_ref() {
+            if entry.is_fresh() {
+                return Ok(entry.inner.clone());
             }
         }
 
@@ -64,7 +90,7 @@ impl KeyStore {
 
         let mut writer = self.cache.write().await;
 
-        let res = reqwest::get(self.jwks_url.clone()).await?;
+        let res = self.client.get(self.jwks_url.clone()).send().await?;
 
         let headers = res.headers();
 
@@ -86,31 +112,35 @@ impl KeyStore {
 
         let jwks: jwk::Set = res.json().await?;
 
-        *writer = Some((exp, jwks.clone()));
+        *writer = Some(CacheEntry::new(exp, jwks.clone()));
 
         Ok(jwks)
     }
 
-    pub async fn get_key(&self, kid: &str) -> Result<Jwk> {
+    pub async fn get_key(&self, kid: &str) -> Result<Option<Jwk>> {
         let jwk::Set { keys } = self.jwks().await?;
 
-        keys.iter()
+        Ok(keys
+            .iter()
             .find(|k| k.key_id.as_deref() == Some(kid))
-            .map(Clone::clone)
-            .ok_or(Error::KeyNotFound)
+            .map(Clone::clone))
     }
 
     pub async fn verify(&self, token: &str) -> Result<AccessTokenClaims> {
         let header = jsonwebtoken::decode_header(token)?;
-        let kid = header.kid.ok_or(Error::MalformedToken)?;
+        let kid = header.kid.ok_or(Error::InvalidToken)?;
 
-        let jwk = self.get_key(&kid).await?;
-        let alg = jwk.algorithm.ok_or(Error::MalformedToken)?;
-        let key = jwk.key.to_jwt_key()?;
+        let jwk = self.get_key(&kid).await?.ok_or(Error::InvalidToken)?;
+        let alg = jwk.algorithm.ok_or(Error::InvalidToken)?;
+        let key = jwk.key.to_jwt_key();
 
-        let data =
-            jsonwebtoken::decode::<AccessTokenClaims>(token, &key, &Validation::new(alg.into()))?;
+        let claims =
+            jsonwebtoken::decode::<AccessTokenClaims>(token, &key, &Validation::new(alg.into()))?
+                .claims;
 
-        Ok(data.claims)
+        #[cfg(feature = "tracing")]
+        debug!(uid=%claims.sub, "verified token");
+
+        Ok(claims)
     }
 }

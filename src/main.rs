@@ -8,11 +8,6 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 async fn main() -> anyhow::Result<()> {
     let _ = dotenv::dotenv();
 
-    tracing_subscriber::registry()
-        .with(fmt::layer().with_filter(EnvFilter::from_default_env()))
-        .with(sentry_tracing::layer())
-        .init();
-
     let config = Config::parse();
 
     let _guard = sentry::init(sentry::ClientOptions {
@@ -21,6 +16,11 @@ async fn main() -> anyhow::Result<()> {
         environment: config.sentry_environment.clone().map(Into::into),
         ..Default::default()
     });
+
+    tracing_subscriber::registry()
+        .with(fmt::layer().with_filter(EnvFilter::from_default_env()))
+        .with(sentry_tracing::layer())
+        .init();
 
     let db = PgPoolOptions::new()
         .max_connections(config.max_database_connections)
