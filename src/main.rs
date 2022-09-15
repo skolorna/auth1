@@ -23,6 +23,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let db = PgPoolOptions::new()
+        .min_connections(config.min_database_connections)
         .max_connections(config.max_database_connections)
         .connect(&config.database_url)
         .await

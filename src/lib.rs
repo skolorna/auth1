@@ -16,6 +16,9 @@ pub struct Config {
     #[clap(long, env, default_value = "10")]
     pub max_database_connections: u32,
 
+    #[clap(long, env, default_value = "2")]
+    pub min_database_connections: u32,
+
     #[clap(env)]
     pub smtp_host: Option<String>,
 
