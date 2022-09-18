@@ -50,7 +50,7 @@ async fn request_token(
             .bind(username)
             .fetch_optional(&mut conn)
             .await?
-            .ok_or_else(Error::user_not_found)?;
+            .ok_or_else(Error::email_not_in_use)?;
 
             verify_password(password, password_hash).await?;
 
@@ -86,7 +86,7 @@ pub async fn verify_password(password: String, password_hash: String) -> Result<
 
         hash.verify_password(&[&Argon2::default()], password)
             .map_err(|e| match e {
-                argon2::password_hash::Error::Password => Error::Unauthorized,
+                argon2::password_hash::Error::Password => Error::WrongEmailPassword,
                 _ => Error::internal(),
             })
     })

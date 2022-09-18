@@ -6,6 +6,8 @@ use axum::{
 };
 use tracing::error;
 
+use crate::jwt::InvalidTokenReason;
+
 #[derive(Debug)]
 pub enum Error {
     Internal,
@@ -13,22 +15,28 @@ pub enum Error {
     Lettre(lettre::error::Error),
     Smtp(lettre::transport::smtp::Error),
     EmailInUse,
-    Unauthorized,
     PasswordRequired,
+    InvalidRefreshToken(InvalidTokenReason),
+    InvalidAccessToken(InvalidTokenReason),
+    InvalidEmailToken(InvalidTokenReason),
+    InvalidResetToken(InvalidTokenReason),
+    WrongEmailPassword,
 }
 
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = match self {
-            Error::Internal | Error::Sqlx(_) | Error::Lettre(_) | Error::Smtp(_) => {
-                "an internal error occurred"
+        match self {
+            Self::Internal | Self::Sqlx(_) | Self::Lettre(_) | Self::Smtp(_) => {
+                f.write_str("an internal error occurred")
             }
-            Error::EmailInUse => "email already in use",
-            Error::Unauthorized => "unauthorized",
-            Error::PasswordRequired => "password required",
-        };
-
-        f.write_str(msg)
+            Self::EmailInUse => f.write_str("email already in use"),
+            Self::PasswordRequired => f.write_str("password required"),
+            Self::InvalidRefreshToken(r) => write!(f, "invalid refresh token: {r}"),
+            Self::InvalidAccessToken(r) => write!(f, "invalid access token: {r}"),
+            Self::InvalidEmailToken(r) => write!(f, "invalid email token: {r}"),
+            Self::InvalidResetToken(r) => write!(f, "invalid reset token: {r}"),
+            Self::WrongEmailPassword => f.write_str("wrong email or password"),
+        }
     }
 }
 
@@ -41,7 +49,11 @@ impl Error {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             Self::EmailInUse | Self::PasswordRequired => StatusCode::BAD_REQUEST,
-            Self::Unauthorized => StatusCode::UNAUTHORIZED,
+            Self::InvalidRefreshToken(_) => StatusCode::UNAUTHORIZED,
+            Self::InvalidAccessToken(_) => StatusCode::UNAUTHORIZED,
+            Self::InvalidEmailToken(_) => StatusCode::BAD_REQUEST,
+            Self::InvalidResetToken(_) => StatusCode::BAD_REQUEST,
+            Self::WrongEmailPassword => StatusCode::UNAUTHORIZED,
         }
     }
 
@@ -49,38 +61,12 @@ impl Error {
         Self::Internal
     }
 
-    pub const fn user_not_found() -> Self {
-        Self::Unauthorized
+    pub const fn email_not_in_use() -> Self {
+        Self::WrongEmailPassword
     }
 
     pub const fn email_in_use() -> Self {
         Self::EmailInUse
-    }
-}
-
-impl From<jsonwebtoken::errors::Error> for Error {
-    fn from(e: jsonwebtoken::errors::Error) -> Self {
-        use jsonwebtoken::errors::ErrorKind;
-
-        match e.kind() {
-            ErrorKind::InvalidToken
-            | ErrorKind::InvalidAlgorithmName
-            | ErrorKind::MissingRequiredClaim(_)
-            | ErrorKind::InvalidIssuer
-            | ErrorKind::InvalidAudience
-            | ErrorKind::ExpiredSignature
-            | ErrorKind::InvalidAlgorithm
-            | ErrorKind::ImmatureSignature
-            | ErrorKind::InvalidSubject
-            | ErrorKind::Base64(_)
-            | ErrorKind::Json(_)
-            | ErrorKind::Utf8(_)
-            | ErrorKind::InvalidSignature => Self::Unauthorized,
-            _ => {
-                error!("jwt error: {e}");
-                Self::Internal
-            }
-        }
     }
 }
 
