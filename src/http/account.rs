@@ -1,7 +1,8 @@
 use argon2::{password_hash::SaltString, Argon2, PasswordHash};
 use axum::{
+    http::StatusCode,
     response::IntoResponse,
-    routing::{get, post},
+    routing::{get, put},
     Extension, Json, Router,
 };
 use lettre::{message::Mailbox, Address};
@@ -16,8 +17,8 @@ use super::{
     ApiContext, Error, Result,
 };
 use crate::{
-    email::send_confirmation_email,
-    jwt::{access_token, refresh_token, verification_token},
+    email::{send_confirmation_email, send_password_reset_email},
+    jwt::{access_token, email_token, refresh_token, reset_token},
 };
 
 #[derive(Debug, Deserialize)]
@@ -65,12 +66,12 @@ async fn register(
 
     let refresh_token = refresh_token::sign(uid, &jwt_secret)?;
     let access_token = access_token::sign(uid, &ctx.ca, &mut tx).await?;
-    let verification_token = verification_token::sign(uid, req.email.to_string(), &password_hash)?;
+    let email_token = email_token::sign(uid, req.email.to_string(), &password_hash)?;
 
     send_confirmation_email(
         &ctx.email,
         Mailbox::new(Some(req.full_name), req.email),
-        &verification_token,
+        &email_token,
         true,
     )
     .await?;
@@ -190,11 +191,11 @@ async fn update_user(
         e => e.into(),
     })?;
 
-    if updated_email {
+    if updated_email || !record.verified {
         send_confirmation_email(
             &ctx.email,
             Mailbox::new(Some(record.full_name.clone()), req.email.unwrap()),
-            &verification_token::sign(identity.claims.sub, record.email.clone(), &record.hash)?,
+            &email_token::sign(identity.claims.sub, record.email.clone(), &record.hash)?,
             false,
         )
         .await?;
@@ -210,10 +211,63 @@ async fn update_user(
     }))
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum ResetPassword {
+    RequestToken { email: Address },
+    Finalize { token: String, password: String },
+}
+
+async fn reset_password(
+    Json(req): Json<ResetPassword>,
+    ctx: Extension<ApiContext>,
+) -> Result<impl IntoResponse> {
+    match req {
+        ResetPassword::RequestToken { email } => {
+            let record = sqlx::query!(
+                "SELECT full_name, id, hash FROM users WHERE email = $1",
+                &email.to_string()
+            )
+            .fetch_optional(&ctx.db)
+            .await?;
+
+            if let Some(record) = record {
+                let token = reset_token::sign(record.id, email.as_ref(), &record.hash)?;
+                let to = Mailbox::new(Some(record.full_name), email);
+
+                send_password_reset_email(&ctx.email, to, &token).await?;
+            }
+
+            Ok(StatusCode::ACCEPTED)
+        }
+        ResetPassword::Finalize { token, password } => {
+            let mut tx = ctx.db.begin().await?;
+
+            let claims = reset_token::verify(&token, &mut tx).await?;
+
+            let password_hash = hash_password(password).await?;
+            let jwt_secret = refresh_token::gen_secret();
+
+            sqlx::query!(
+                "UPDATE users SET hash = $1, jwt_secret = $2 WHERE id = $3",
+                password_hash,
+                &jwt_secret,
+                claims.sub
+            )
+            .execute(&mut tx)
+            .await?;
+
+            tx.commit().await?;
+
+            Ok(StatusCode::NO_CONTENT)
+        }
+    }
+}
+
 pub fn routes() -> Router {
     Router::new()
-        .route("/", post(register))
-        .route("/@me", get(get_current_user).patch(update_user))
+        .route("/", get(get_current_user).patch(update_user).post(register))
+        .route("/password", put(reset_password))
 }
 
 async fn hash_password(password: String) -> Result<String> {

@@ -32,6 +32,10 @@ pub struct Config {
     #[clap(long, env)]
     pub verification_url: String,
 
+    /// Password reset template. Use `{token}` in place of the token.
+    #[clap(long, env)]
+    pub password_reset_url: String,
+
     #[clap(env)]
     pub sentry_dsn: Option<Dsn>,
 
@@ -66,6 +70,7 @@ impl Config {
             reply_to: None,
             transport,
             verification_url: self.verification_url.clone(),
+            password_reset_url: self.password_reset_url.clone(),
         })
     }
 }

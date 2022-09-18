@@ -32,6 +32,7 @@ pub struct Client {
     pub(crate) reply_to: Option<Mailbox>,
     pub(crate) transport: Transport,
     pub(crate) verification_url: String,
+    pub(crate) password_reset_url: String,
 }
 
 impl Client {
@@ -56,6 +57,13 @@ impl Client {
         let mut vars = HashMap::new();
         vars.insert("token".to_string(), token);
         self.verification_url.format(&vars)
+    }
+
+    #[instrument(skip_all, fields(self.password_reset_url), err)]
+    pub fn password_reset_url(&self, token: &str) -> Result<String, strfmt::FmtError> {
+        let mut vars = HashMap::new();
+        vars.insert("token".to_string(), token);
+        self.password_reset_url.format(&vars)
     }
 }
 
@@ -82,6 +90,32 @@ pub async fn send_confirmation_email(
         .subject(subject)
         .singlepart(SinglePart::plain(formatdoc! {"
             Klicka på länken nedan för att bekräfta din e-postadress:
+
+            {url}
+        "}))?;
+
+    client.send(email).await?;
+
+    Ok(())
+}
+
+pub async fn send_password_reset_email(
+    client: &Client,
+    to: Mailbox,
+    reset_token: &str,
+) -> Result<()> {
+    let url = client
+        .password_reset_url(reset_token)
+        .map_err(|_| Error::internal())?;
+
+    let email = client
+        .msg_builder()
+        .to(to)
+        .subject("Återställ ditt lösenord")
+        .singlepart(SinglePart::plain(formatdoc! {"
+            Någon har begärt att ditt lösenord ska återställas. (Du kan ignorera det här meddelandet om det inte var du.)
+
+            Klicka på länken nedan för att återställa ditt lösenord:
 
             {url}
         "}))?;

@@ -2,7 +2,7 @@ use axum::{response::IntoResponse, routing::post, Extension, Json, Router};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
-use crate::jwt::verification_token;
+use crate::jwt::email_token;
 
 use super::{ApiContext, Result};
 
@@ -16,7 +16,7 @@ async fn verify(
     ctx: Extension<ApiContext>,
     Json(req): Json<VerifyRequest>,
 ) -> Result<impl IntoResponse> {
-    verification_token::verify(&req.token, &mut ctx.db.acquire().await?).await?;
+    email_token::verify(&req.token, &mut ctx.db.acquire().await?).await?;
 
     Ok("verified")
 }

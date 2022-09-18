@@ -8,11 +8,11 @@ use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 use crate::{email, x509, Config};
 
+mod account;
 mod error;
 mod extract;
 mod keys;
 mod token;
-mod users;
 mod verify;
 
 pub use error::Error;
@@ -40,7 +40,7 @@ pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
 
 pub fn app(db: PgPool, email: email::Client, ca: x509::Authority) -> Router {
     Router::new()
-        .nest("/users", users::routes())
+        .nest("/account", account::routes())
         .nest("/keys", keys::routes())
         .nest("/token", token::routes())
         .nest("/verify", verify::routes())
