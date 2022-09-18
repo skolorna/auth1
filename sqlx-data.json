@@ -58,6 +58,38 @@
     },
     "query": "SELECT id, email, verified, full_name FROM users WHERE id = $1"
   },
+  "6d9bda40ad349797d2d68f10391a46a7c9e883307313722954c1069cf49f41fb": {
+    "describe": {
+      "columns": [
+        {
+          "name": "full_name",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "id",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "hash",
+          "ordinal": 2,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "SELECT full_name, id, hash FROM users WHERE email = $1"
+  },
   "7e49fa000b8a680098f8861fb38e617ee37d4c1271cdf704fd276b4bba9508fd": {
     "describe": {
       "columns": [],
@@ -225,5 +257,19 @@
       }
     },
     "query": "SELECT email FROM users WHERE id = $1"
+  },
+  "f69ce41c31dc38b05dbf24b8703ce6ffbeb0e189df40f06ff01a6c1c8a1866a3": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Bytea",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "UPDATE users SET hash = $1, jwt_secret = $2 WHERE id = $3"
   }
 }
