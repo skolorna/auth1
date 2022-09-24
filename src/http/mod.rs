@@ -28,7 +28,7 @@ struct ApiContext {
 
 pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
     let client = config.email_client()?;
-    let ca = x509::Authority::self_signed().context("error generating self-signed certificate")?;
+    let ca = config.ca()?;
 
     let app = app(db, client, ca);
 

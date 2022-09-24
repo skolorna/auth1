@@ -48,7 +48,8 @@ impl Error {
             Self::Internal | Self::Sqlx(_) | Self::Lettre(_) | Self::Smtp(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
-            Self::EmailInUse | Self::PasswordRequired => StatusCode::BAD_REQUEST,
+            Self::EmailInUse => StatusCode::CONFLICT,
+            Self::PasswordRequired => StatusCode::BAD_REQUEST,
             Self::InvalidRefreshToken(_) => StatusCode::UNAUTHORIZED,
             Self::InvalidAccessToken(_) => StatusCode::UNAUTHORIZED,
             Self::InvalidEmailToken(_) => StatusCode::BAD_REQUEST,
