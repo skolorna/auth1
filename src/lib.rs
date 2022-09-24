@@ -1,3 +1,6 @@
+use std::path::PathBuf;
+
+use anyhow::bail;
 use http::Result;
 use lettre::{transport::smtp::authentication::Credentials, AsyncSmtpTransport, Tokio1Executor};
 use sentry::types::Dsn;
@@ -10,6 +13,12 @@ pub mod x509;
 
 #[derive(clap::Parser)]
 pub struct Config {
+    #[clap(long, env)]
+    pub ca_cert: Option<PathBuf>,
+
+    #[clap(long, env)]
+    pub ca_key: Option<PathBuf>,
+
     #[clap(long, env)]
     pub database_url: String,
 
@@ -72,5 +81,14 @@ impl Config {
             verification_url: self.verification_url.clone(),
             password_reset_url: self.password_reset_url.clone(),
         })
+    }
+
+    pub fn ca(&self) -> anyhow::Result<x509::Authority> {
+        match (self.ca_cert.as_ref(), self.ca_key.as_ref()) {
+            (Some(cert), Some(key)) => x509::Authority::from_files(cert, key),
+            (Some(_), None) => bail!("no key specified"),
+            (None, Some(_)) => bail!("no certificate specified"),
+            (None, None) => x509::Authority::self_signed().map_err(Into::into),
+        }
     }
 }

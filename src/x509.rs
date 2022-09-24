@@ -1,5 +1,12 @@
-use std::{fmt::Display, str::FromStr};
+use std::{
+    fmt::Display,
+    fs::{self, File},
+    io::{BufRead, BufReader, Seek},
+    path::Path,
+    str::FromStr,
+};
 
+use anyhow::{bail, Context};
 use base64::display::Base64Display;
 
 use openssl::{
@@ -57,6 +64,17 @@ impl Chain {
 
     pub fn last(&self) -> Option<&X509> {
         self.0.last()
+    }
+
+    pub fn from_pem_bundle(bundle: impl BufRead + Seek) -> anyhow::Result<Self> {
+        let mut chain = Self::new();
+
+        for pem in x509_parser::pem::Pem::iter_from_reader(bundle) {
+            let pem = pem?;
+            chain.push(X509::from_der(&pem.contents)?);
+        }
+
+        Ok(chain)
     }
 
     pub fn verify(&self) -> Result<bool, openssl::error::ErrorStack> {
@@ -140,6 +158,21 @@ pub struct Authority {
 }
 
 impl Authority {
+    /// Construct an authority from PEM-encoded files.
+    pub fn from_files(cert_chain: &Path, key: &Path) -> anyhow::Result<Self> {
+        let cert = BufReader::new(File::open(cert_chain)?);
+        let chain = Chain::from_pem_bundle(cert)?;
+
+        if !chain.verify()? {
+            bail!("invalid certificate chain");
+        };
+
+        let key = PKey::private_key_from_pem(&fs::read(key)?)
+            .with_context(|| format!("failed to parse private key at {key:?}"))?;
+
+        Ok(Self { chain, key })
+    }
+
     pub fn self_signed() -> Result<Self, ErrorStack> {
         let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
         let key = EcKey::generate(&group)?;
