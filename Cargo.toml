@@ -15,7 +15,7 @@ auth1-sdk = { version = "0.1.1", path = "sdk" }
 axum = { version = "0.5.15", features = ["headers"] }
 base64 = "0.13.0"
 blake3 = "1.3.1"
-clap = { version = "3.2.17", features = ["derive", "env"] }
+clap = { version = "4.0.13", features = ["derive", "env"] }
 dotenv = "0.15.0"
 futures = "0.3.23"
 indoc = "1.0.7"
