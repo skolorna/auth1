@@ -202,6 +202,19 @@
     },
     "query": "SELECT hash FROM users WHERE id = $1"
   },
+  "c32ae0a2da83d2466c1487211bb26e1d2aad2d96ae13c53a85171aa5551bec00": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Bytea",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "UPDATE USERS SET oob_secret = $1 WHERE id = $2"
+  },
   "c8b7ee30b04a561d12ec7a5a67d70231877664ebe0c3d0b96a447a9c272dd81e": {
     "describe": {
       "columns": [],

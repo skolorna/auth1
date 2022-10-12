@@ -318,6 +318,105 @@ pub mod reset_token {
     }
 }
 
+pub mod oob {
+    use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation};
+    use rand::{thread_rng, Rng};
+    use serde::{Deserialize, Serialize};
+    use sqlx::PgExecutor;
+    use time::{Duration, OffsetDateTime};
+    use uuid::Uuid;
+
+    use crate::http::{Error, Result};
+
+    use super::{decode_insecure, InvalidTokenReason, JwtResultExt};
+
+    pub const TTL: Duration = Duration::hours(1);
+    pub const SECRET_LEN: usize = 64;
+
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "lowercase")]
+    pub enum Band {
+        Email,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct Claims {
+        pub sub: Uuid,
+        pub exp: i64,
+        pub band: Band,
+    }
+
+    pub fn gen_secret() -> [u8; SECRET_LEN] {
+        let mut buf = [0; SECRET_LEN];
+        thread_rng().fill(&mut buf);
+        buf
+    }
+
+    /// "But what's the difference between a secret and a key?" I hear you ask.
+    ///
+    /// Good question.
+    ///
+    /// Here, the secret constitutes *part of* the key used for encoding and decoding
+    /// the token.
+    fn gen_key(attr: &[u8], secret: &[u8]) -> blake3::Hash {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(attr);
+        hasher.update(secret);
+        hasher.finalize()
+    }
+
+    pub fn sign(sub: Uuid, band: Band, attr: impl AsRef<[u8]>, secret: &[u8]) -> Result<String> {
+        let key = EncodingKey::from_secret(gen_key(attr.as_ref(), secret).as_bytes());
+        let exp = OffsetDateTime::now_utc() + TTL;
+        let claims = Claims {
+            sub,
+            exp: exp.unix_timestamp(),
+            band,
+        };
+
+        jsonwebtoken::encode(&Header::default(), &claims, &key).map_err(|_| unreachable!())
+    }
+
+    pub async fn verify(token: &str, db: impl PgExecutor<'_>) -> Result<Claims> {
+        let claims = decode_insecure::<Claims>(token)
+            .map_token_err(Error::InvalidOobToken)?
+            .claims;
+
+        let (attr, secret) = match claims.band {
+            Band::Email => {
+                sqlx::query_as::<_, (String, Option<Vec<u8>>)>(
+                    "SELECT email, oob_secret FROM users WHERE id = $1",
+                )
+                .bind(claims.sub)
+                .fetch_one(db)
+                .await?
+            }
+        };
+
+        let secret = secret.ok_or(Error::InvalidOobToken(InvalidTokenReason::Bad))?;
+        let key = DecodingKey::from_secret(gen_key(attr.as_ref(), &secret).as_bytes());
+
+        jsonwebtoken::decode::<Claims>(token, &key, &Validation::default())
+            .map_token_err(Error::InvalidOobToken)?;
+
+        Ok(claims)
+    }
+
+    pub async fn update_secret(user: Uuid, db: impl PgExecutor<'_>) -> Result<[u8; SECRET_LEN]> {
+        let secret = gen_secret();
+
+        sqlx::query!(
+            "UPDATE USERS SET oob_secret = $1 WHERE id = $2",
+            &secret,
+            user
+        )
+        .execute(db)
+        .await?;
+
+        Ok(secret)
+    }
+}
+
 fn decode_insecure<T: DeserializeOwned>(token: &str) -> jsonwebtoken::errors::Result<TokenData<T>> {
     let mut validation = Validation::default();
     validation.insecure_disable_signature_validation();

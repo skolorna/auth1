@@ -11,7 +11,7 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::parse();
 
     let _guard = sentry::init(sentry::ClientOptions {
-        traces_sample_rate: config.traces_sample_rate.unwrap_or(1.0),
+        traces_sample_rate: config.traces_sample_rate,
         dsn: config.sentry_dsn.clone(),
         environment: config.sentry_environment.clone().map(Into::into),
         ..Default::default()

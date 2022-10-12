@@ -51,8 +51,8 @@ pub struct Config {
     #[clap(env)]
     pub sentry_environment: Option<String>,
 
-    #[clap(env)]
-    pub traces_sample_rate: Option<f32>,
+    #[clap(env, default_value = "1.0")]
+    pub traces_sample_rate: f32,
 }
 
 impl Config {

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::jwt::{access_token, refresh_token};
+use crate::jwt::{access_token, oob, refresh_token};
 
 use super::{ApiContext, Error, Result};
 
@@ -15,6 +15,9 @@ enum TokenRequest {
         /// Actually an email, but "username" conforms to OpenID spec
         username: String,
         password: String,
+    },
+    Oob {
+        token: String,
     },
     RefreshToken {
         refresh_token: String,
@@ -59,6 +62,24 @@ async fn request_token(
                 token_type: TokenType::Bearer,
                 expires_in: access_token::TTL.whole_seconds(),
                 refresh_token: Some(refresh_token::sign(uid, &jwt_secret)?),
+            }
+        }
+        TokenRequest::Oob { token } => {
+            let claims = oob::verify(&token, &mut conn).await?;
+
+            let (jwt_secret,) =
+                sqlx::query_as::<_, (Vec<u8>,)>("SELECT jwt_secret FROM users WHERE id = $1")
+                    .bind(claims.sub)
+                    .fetch_one(&mut conn)
+                    .await?;
+
+            oob::update_secret(claims.sub, &mut conn).await?;
+
+            TokenResponse {
+                access_token: access_token::sign(claims.sub, &ctx.ca, &mut conn).await?,
+                token_type: TokenType::Bearer,
+                expires_in: access_token::TTL.whole_seconds(),
+                refresh_token: Some(refresh_token::sign(claims.sub, &jwt_secret)?),
             }
         }
         TokenRequest::RefreshToken { refresh_token } => {

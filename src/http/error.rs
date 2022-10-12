@@ -20,6 +20,7 @@ pub enum Error {
     InvalidAccessToken(InvalidTokenReason),
     InvalidEmailToken(InvalidTokenReason),
     InvalidResetToken(InvalidTokenReason),
+    InvalidOobToken(InvalidTokenReason),
     WrongEmailPassword,
 }
 
@@ -35,6 +36,7 @@ impl Display for Error {
             Self::InvalidAccessToken(r) => write!(f, "invalid access token: {r}"),
             Self::InvalidEmailToken(r) => write!(f, "invalid email token: {r}"),
             Self::InvalidResetToken(r) => write!(f, "invalid reset token: {r}"),
+            Self::InvalidOobToken(r) => write!(f, "invalid oob token: {r}"),
             Self::WrongEmailPassword => f.write_str("wrong email or password"),
         }
     }
@@ -54,6 +56,7 @@ impl Error {
             Self::InvalidAccessToken(_) => StatusCode::UNAUTHORIZED,
             Self::InvalidEmailToken(_) => StatusCode::BAD_REQUEST,
             Self::InvalidResetToken(_) => StatusCode::BAD_REQUEST,
+            Self::InvalidOobToken(_) => StatusCode::BAD_REQUEST,
             Self::WrongEmailPassword => StatusCode::UNAUTHORIZED,
         }
     }
