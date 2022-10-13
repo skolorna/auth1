@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 
 use crate::http::{Error, Result};
+use handlebars::Handlebars;
 use indoc::formatdoc;
 use lettre::{
-    message::{Mailbox, MessageBuilder, SinglePart},
+    message::{Mailbox, MessageBuilder, MultiPart, SinglePart},
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
+use serde::Serialize;
 use strfmt::Format;
 use tracing::{debug, instrument};
 
@@ -27,12 +29,58 @@ impl Transport {
     }
 }
 
+pub struct Templates {
+    hbs: Handlebars<'static>,
+}
+
+impl Default for Templates {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Templates {
+    pub fn new() -> Self {
+        Self {
+            hbs: Handlebars::new(),
+        }
+    }
+
+    pub fn insert(&mut self, name: &str, mjml: &str, plain: &str) -> anyhow::Result<()> {
+        let html = mrml::parse(mjml)
+            .unwrap()
+            .render(&Default::default())
+            .unwrap();
+        self.hbs
+            .register_template_string(&format!("{name}-html"), html)?;
+        self.hbs
+            .register_template_string(&format!("{name}-plain"), plain)?;
+        Ok(())
+    }
+
+    #[instrument(level = "debug", skip(self), ret)]
+    pub fn login(&self, url: &str) -> Result<(String, String)> {
+        #[derive(Debug, Serialize)]
+        struct Data<'a> {
+            url: &'a str,
+        }
+
+        let data = Data { url };
+
+        let html = self.hbs.render("login-html", &data)?;
+        let plain = self.hbs.render("login-plain", &data)?;
+
+        Ok((html, plain))
+    }
+}
+
 pub struct Client {
     pub(crate) from: Mailbox,
     pub(crate) reply_to: Option<Mailbox>,
     pub(crate) transport: Transport,
     pub(crate) verification_url: String,
     pub(crate) password_reset_url: String,
+    pub(crate) templates: Templates,
 }
 
 impl Client {
@@ -67,32 +115,30 @@ impl Client {
     }
 }
 
-#[instrument(skip_all, fields(to = %to, welcome))]
-pub async fn send_confirmation_email(
+#[instrument(skip_all, fields(%to, first))]
+pub async fn send_login_email(
     client: &Client,
     to: Mailbox,
-    verification_token: &str,
-    welcome: bool,
+    token: &str,
+    first: bool,
 ) -> Result<()> {
-    let subject = if welcome {
+    let subject = if first {
         "Välkommen till Skolorna"
     } else {
         "Bekräfta din e-postadress"
     };
 
     let url = client
-        .verification_url(verification_token)
+        .verification_url(token)
         .map_err(|_| Error::internal())?;
+
+    let (html, plain) = client.templates.login(&url)?;
 
     let email = client
         .msg_builder()
         .to(to)
         .subject(subject)
-        .singlepart(SinglePart::plain(formatdoc! {"
-            Klicka på länken nedan för att bekräfta din e-postadress:
-
-            {url}
-        "}))?;
+        .multipart(MultiPart::alternative_plain_html(plain, html))?;
 
     client.send(email).await?;
 

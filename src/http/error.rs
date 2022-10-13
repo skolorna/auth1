@@ -102,6 +102,13 @@ impl From<lettre::transport::smtp::Error> for Error {
     }
 }
 
+impl From<handlebars::RenderError> for Error {
+    fn from(e: handlebars::RenderError) -> Self {
+        error!("handlebars render error: {e}");
+        Error::Internal
+    }
+}
+
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         (self.status_code(), self.to_string()).into_response()

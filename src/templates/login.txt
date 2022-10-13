@@ -1,0 +1,5 @@
+**********************
+Inloggning på Skolorna
+**********************
+
+Godkänn inloggningsförfrågan ({{ url }})

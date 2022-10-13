@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use anyhow::bail;
-use http::Result;
 use lettre::{transport::smtp::authentication::Credentials, AsyncSmtpTransport, Tokio1Executor};
 use sentry::types::Dsn;
 use tracing::warn;
@@ -56,7 +55,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn email_client(&self) -> Result<email::Client> {
+    pub fn email_client(&self) -> anyhow::Result<email::Client> {
         let transport = if let Some(ref host) = self.smtp_host {
             let mut smtp = AsyncSmtpTransport::<Tokio1Executor>::relay(host)?;
 
@@ -72,6 +71,14 @@ impl Config {
             email::Transport::File
         };
 
+        let mut templates = email::Templates::new();
+
+        templates.insert(
+            "login",
+            include_str!("templates/login.mjml"),
+            include_str!("templates/login.txt"),
+        )?;
+
         Ok(email::Client {
             from: "Skolorna <system@skolorna.com>"
                 .parse()
@@ -80,6 +87,7 @@ impl Config {
             transport,
             verification_url: self.verification_url.clone(),
             password_reset_url: self.password_reset_url.clone(),
+            templates,
         })
     }
 

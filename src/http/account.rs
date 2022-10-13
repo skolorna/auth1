@@ -17,7 +17,7 @@ use super::{
     ApiContext, Error, Result,
 };
 use crate::{
-    email::{send_confirmation_email, send_password_reset_email},
+    email::{send_login_email, send_password_reset_email},
     jwt::{access_token, email_token, refresh_token, reset_token},
 };
 
@@ -68,7 +68,7 @@ async fn register(
     let access_token = access_token::sign(uid, &ctx.ca, &mut tx).await?;
     let email_token = email_token::sign(uid, req.email.to_string(), &password_hash)?;
 
-    send_confirmation_email(
+    send_login_email(
         &ctx.email,
         Mailbox::new(Some(req.full_name), req.email),
         &email_token,
@@ -192,7 +192,7 @@ async fn update_user(
     })?;
 
     if updated_email || !record.verified {
-        send_confirmation_email(
+        send_login_email(
             &ctx.email,
             Mailbox::new(Some(record.full_name.clone()), req.email.unwrap()),
             &email_token::sign(identity.claims.sub, record.email.clone(), &record.hash)?,
