@@ -1,9 +1,12 @@
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 
 use anyhow::bail;
-use lettre::{transport::smtp::authentication::Credentials, AsyncSmtpTransport, Tokio1Executor, AsyncFileTransport};
+use lettre::{
+    transport::smtp::authentication::Credentials, AsyncFileTransport, AsyncSmtpTransport,
+    Tokio1Executor,
+};
 use sentry::types::Dsn;
-use tracing::{warn, info};
+use tracing::{info, warn};
 
 pub mod email;
 pub mod http;
