@@ -14,7 +14,6 @@ mod extract;
 mod keys;
 mod login;
 mod token;
-mod verify;
 
 pub use error::Error;
 
@@ -44,7 +43,6 @@ pub fn app(db: PgPool, email: email::Client, ca: x509::Authority) -> Router {
         .nest("/account", account::routes())
         .nest("/keys", keys::routes())
         .nest("/token", token::routes())
-        .nest("/verify", verify::routes())
         .nest("/login", login::routes())
         .layer(Extension(ApiContext {
             db,

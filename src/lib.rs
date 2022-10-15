@@ -1,13 +1,14 @@
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 
 use anyhow::bail;
-use lettre::{transport::smtp::authentication::Credentials, AsyncSmtpTransport, Tokio1Executor};
+use lettre::{transport::smtp::authentication::Credentials, AsyncSmtpTransport, Tokio1Executor, AsyncFileTransport};
 use sentry::types::Dsn;
-use tracing::warn;
+use tracing::{warn, info};
 
 pub mod email;
 pub mod http;
 pub mod jwt;
+pub mod oob;
 pub mod x509;
 
 #[derive(clap::Parser)]
@@ -36,13 +37,9 @@ pub struct Config {
     #[clap(env)]
     pub smtp_password: Option<String>,
 
-    /// Email verification url template. Use `{token}` in place of the token.
+    /// OTP email login url template. Use `{otp}` in place of the one time password.
     #[clap(long, env)]
-    pub verification_url: String,
-
-    /// Password reset template. Use `{token}` in place of the token.
-    #[clap(long, env)]
-    pub password_reset_url: String,
+    pub login_url: String,
 
     #[clap(env)]
     pub sentry_dsn: Option<Dsn>,
@@ -68,7 +65,11 @@ impl Config {
 
             email::Transport::Smtp(smtp.build())
         } else {
-            email::Transport::File
+            let dir = Path::new("./mail");
+            std::fs::create_dir_all(dir)?;
+            info!("saving mail to {dir:?}");
+
+            email::Transport::File(AsyncFileTransport::new(dir))
         };
 
         let mut templates = email::Templates::new();
@@ -85,8 +86,7 @@ impl Config {
                 .expect("failed to parse default mailbox"),
             reply_to: None,
             transport,
-            verification_url: self.verification_url.clone(),
-            password_reset_url: self.password_reset_url.clone(),
+            login_url: self.login_url.clone(),
             templates,
         })
     }

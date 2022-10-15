@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 
-use crate::http::{Error, Result};
+use crate::{
+    http::{Error, Result},
+    oob::Otp,
+};
 use handlebars::Handlebars;
-use indoc::formatdoc;
+
 use lettre::{
-    message::{Mailbox, MessageBuilder, MultiPart, SinglePart},
-    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
+    message::{Mailbox, MessageBuilder, MultiPart},
+    AsyncFileTransport, AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
 use serde::Serialize;
 use strfmt::Format;
@@ -13,16 +16,18 @@ use tracing::{debug, instrument};
 
 pub enum Transport {
     Smtp(AsyncSmtpTransport<Tokio1Executor>),
-    File,
+    File(AsyncFileTransport<Tokio1Executor>),
 }
 
 impl Transport {
     pub async fn send(&self, message: Message) -> Result<()> {
         match self {
-            Transport::Smtp(smtp) => {
-                smtp.send(message).await?;
+            Transport::Smtp(transport) => {
+                transport.send(message).await?;
             }
-            Transport::File => todo!(),
+            Transport::File(transport) => {
+                transport.send(message).await?;
+            }
         }
 
         Ok(())
@@ -59,13 +64,14 @@ impl Templates {
     }
 
     #[instrument(level = "debug", skip(self), ret)]
-    pub fn login(&self, url: &str) -> Result<(String, String)> {
+    pub fn login(&self, url: &str, otp: Otp) -> Result<(String, String)> {
         #[derive(Debug, Serialize)]
         struct Data<'a> {
             url: &'a str,
+            otp: Otp,
         }
 
-        let data = Data { url };
+        let data = Data { url, otp };
 
         let html = self.hbs.render("login-html", &data)?;
         let plain = self.hbs.render("login-plain", &data)?;
@@ -78,8 +84,7 @@ pub struct Client {
     pub(crate) from: Mailbox,
     pub(crate) reply_to: Option<Mailbox>,
     pub(crate) transport: Transport,
-    pub(crate) verification_url: String,
-    pub(crate) password_reset_url: String,
+    pub(crate) login_url: String,
     pub(crate) templates: Templates,
 }
 
@@ -101,70 +106,26 @@ impl Client {
     }
 
     #[instrument(skip_all, fields(self.verification_url), err)]
-    pub fn verification_url(&self, token: &str) -> Result<String, strfmt::FmtError> {
+    pub fn login_url(&self, otp: &str) -> Result<String, strfmt::FmtError> {
         let mut vars = HashMap::new();
-        vars.insert("token".to_string(), token);
-        self.verification_url.format(&vars)
-    }
-
-    #[instrument(skip_all, fields(self.password_reset_url), err)]
-    pub fn password_reset_url(&self, token: &str) -> Result<String, strfmt::FmtError> {
-        let mut vars = HashMap::new();
-        vars.insert("token".to_string(), token);
-        self.password_reset_url.format(&vars)
+        vars.insert("otp".to_string(), otp);
+        self.login_url.format(&vars)
     }
 }
 
 #[instrument(skip_all, fields(%to, first))]
-pub async fn send_login_email(
-    client: &Client,
-    to: Mailbox,
-    token: &str,
-    first: bool,
-) -> Result<()> {
-    let subject = if first {
-        "Välkommen till Skolorna"
-    } else {
-        "Bekräfta din e-postadress"
-    };
-
+pub async fn send_login_email(client: &Client, to: Mailbox, otp: Otp) -> Result<()> {
     let url = client
-        .verification_url(token)
+        .login_url(&otp.to_string())
         .map_err(|_| Error::internal())?;
 
-    let (html, plain) = client.templates.login(&url)?;
+    let (html, plain) = client.templates.login(&url, otp)?;
 
     let email = client
         .msg_builder()
         .to(to)
-        .subject(subject)
+        .subject("Logga in på Skolorna")
         .multipart(MultiPart::alternative_plain_html(plain, html))?;
-
-    client.send(email).await?;
-
-    Ok(())
-}
-
-pub async fn send_password_reset_email(
-    client: &Client,
-    to: Mailbox,
-    reset_token: &str,
-) -> Result<()> {
-    let url = client
-        .password_reset_url(reset_token)
-        .map_err(|_| Error::internal())?;
-
-    let email = client
-        .msg_builder()
-        .to(to)
-        .subject("Återställ ditt lösenord")
-        .singlepart(SinglePart::plain(formatdoc! {"
-            Någon har begärt att ditt lösenord ska återställas. (Du kan ignorera det här meddelandet om det inte var du.)
-
-            Klicka på länken nedan för att återställa ditt lösenord:
-
-            {url}
-        "}))?;
 
     client.send(email).await?;
 

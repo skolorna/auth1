@@ -1,16 +1,32 @@
-use axum::{http::StatusCode, response::IntoResponse, routing::post, Extension, Json, Router};
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::post,
+    Extension, Json, Router,
+};
 use lettre::message::Mailbox;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::{email::send_login_email, jwt::oob};
+use crate::{email::send_login_email, oob};
 
 use super::{ApiContext, Error, Result};
 
 #[derive(Debug, Deserialize)]
 pub struct LoginRequest {
     email: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LoginResponse {
+    pub token: String,
+}
+
+impl IntoResponse for LoginResponse {
+    fn into_response(self) -> Response {
+        (StatusCode::ACCEPTED, Json(self)).into_response()
+    }
 }
 
 async fn login(
@@ -25,7 +41,7 @@ async fn login(
     .bind(&email)
     .fetch_optional(&mut tx)
     .await?
-    .ok_or(Error::WrongEmailPassword)?;
+    .ok_or(Error::AccountNotFound)?;
 
     let mailbox = Mailbox::new(
         Some(full_name),
@@ -41,13 +57,13 @@ async fn login(
         oob::update_secret(user, &mut tx).await?.to_vec() // suboptimal heap allocation
     };
 
-    let token = oob::sign(user, oob::Band::Email, &email, &secret)?;
+    let (token, otp) = oob::sign(user, oob::Band::Email, &email, &secret);
 
-    send_login_email(&ctx.email, mailbox, &token, false).await?;
+    send_login_email(&ctx.email, mailbox, otp).await?;
 
     tx.commit().await?;
 
-    Ok(StatusCode::ACCEPTED)
+    Ok(LoginResponse { token })
 }
 
 pub fn routes() -> Router {
