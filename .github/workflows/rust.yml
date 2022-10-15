@@ -21,23 +21,6 @@ jobs:
   test:
     name: Test Suite
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres
-        ports:
-          - 5432:5432
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: auth1
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-      redis:
-        image: redis
-        ports:
-          - 6379:6379
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -48,9 +31,6 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: test
-        env:
-          DATABASE_URL: postgres://postgres:postgres@localhost/auth1
-          REDIS_URL: redis://localhost
 
   fmt:
     name: Rustfmt
