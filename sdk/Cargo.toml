@@ -20,7 +20,7 @@ thiserror = "1.0.37"
 time = "0.3.14"
 tokio = { version = "1.21.2", features = ["time"] }
 tracing = { version = "0.1.36", optional = true }
-uuid = { version = "1.1.2", features = ["serde"] }
+uuid = { version = "1.2.1", features = ["serde"] }
 
 [dev-dependencies]
 tokio = { version = "1.21.2", features = ["rt", "macros"] }
