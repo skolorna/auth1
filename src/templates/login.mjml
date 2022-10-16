@@ -4,7 +4,7 @@
       <mj-column border="1px solid #eee" padding="0">
         <mj-text align="center" font-family="Arial, sans-serif" font-size="32px" font-weight="700" letter-spacing="-0.03em" padding="0" padding-top="16px">Logga in på Skolorna</mj-text>
         <mj-text align="center" padding="32px 0" font-family="Arial, sans-serif" font-size="16px">Tryck på knappen för att logga in på ditt konto.</mj-text>
-        <mj-button font-family="Arial, sans-serif" font-size="16px" font-weight="700" border-radius="24px" line-height="1" padding="0" inner-padding="16px 32px" background-color="#2040df" color="#fff" padding-bottom="16px">Logga in</mj-button>
+        <mj-button href="{{ url }}" font-family="Arial, sans-serif" font-size="16px" font-weight="700" border-radius="24px" line-height="1" padding="0" inner-padding="16px 32px" background-color="#2040df" color="#fff" padding-bottom="16px">Logga in</mj-button>
       </mj-column>
     </mj-section>
     <mj-section padding="0">
