@@ -3,10 +3,8 @@ members = [".", "jwk", "sdk"]
 
 [package]
 name = "auth1"
-version = "0.2.10"
+version = "0.2.11"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow = "1.0.65"
@@ -37,7 +35,7 @@ rand = "0.8.5"
 sentry = "0.27.0"
 sentry-tower = { version = "0.27.0", features = ["http"] }
 sentry-tracing = "0.27.0"
-serde = { version = "1.0.144", features = ["derive"] }
+serde = { version = "1.0.145", features = ["derive"] }
 serde_with = { version = "2.0.1", features = ["base64"] }
 sqlx = { version = "0.6.2", features = [
   "runtime-tokio-rustls",
@@ -52,7 +50,7 @@ time = "0.3.15"
 tokio = { version = "1.21.2", features = ["full"] }
 tower = { version = "0.4.13", default-features = false, features = ["tracing"] }
 tower-http = { version = "0.3.4", features = ["cors", "trace"] }
-tracing = "0.1.36"
+tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 uuid = { version = "1.2.1", features = ["v4", "serde"] }
 x509-parser = "0.14.0"

@@ -1,16 +1,43 @@
 <mjml>
+  <mj-head>
+    <mj-title>Logga in på Skolorna</mj-title>
+    <mj-font name="Inter" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700" />
+    <mj-attributes>
+      <mj-all font-family="Inter, Arial, sans-serif" />
+    </mj-attributes>
+  </mj-head>
   <mj-body>
-    <mj-section padding="32px 0">
-      <mj-column border="1px solid #eee" padding="0">
-        <mj-text align="center" font-family="Arial, sans-serif" font-size="32px" font-weight="700" letter-spacing="-0.03em" padding="0" padding-top="16px">Logga in på Skolorna</mj-text>
-        <mj-text align="center" padding="32px 0" font-family="Arial, sans-serif" font-size="16px">Tryck på knappen för att logga in på ditt konto.</mj-text>
-        <mj-button href="{{ url }}" font-family="Arial, sans-serif" font-size="16px" font-weight="700" border-radius="24px" line-height="1" padding="0" inner-padding="16px 32px" background-color="#2040df" color="#fff" padding-bottom="16px">Logga in</mj-button>
-      </mj-column>
-    </mj-section>
-    <mj-section padding="0">
-      <mj-column>
-        <mj-text align="center" padding="0" font-family="Arial, sans-serif" font-size="12px" color="#999">© Skolorna</mj-text>
-      </mj-column>
-    </mj-section>
+    <mj-container background-color="#fff">
+      <mj-section padding="40px">
+        <mj-column>
+          <mj-text align="center" font-size="32px" font-weight="700" letter-spacing="-0.022em" padding-bottom="8px">
+            Logga in på Skolorna
+          </mj-text>
+
+          <mj-text align="center" font-size="16px" font-weight="400" padding-bottom="24px">
+            Tryck på knappen för att logga in.
+          </mj-text>
+
+          <mj-button href="{{ url }}" font-size="16px" font-weight="600" inner-padding="16px 24px" background-color="#2040df" border-radius="9999px">
+            Logga in
+          </mj-button>
+
+          <mj-text align="center" padding-top="24px" font-size="16px" font-weight="400">
+            Om knappen inte fungerar kan du ange följande kod:
+          </mj-text>
+
+          <mj-text background-color="#999999" align="center">
+            <mj-raw>
+              <code style="padding: 0.2em 0.4em; background-color: #eee; border-radius: 3px;">
+                {{ otp }}
+              </code>
+            </mj-raw>
+          </mj-text>
+
+          <mj-text align="center" padding="0" font-size="12px" color="#999" padding-top="32px">© Skolorna</mj-text>
+        </mj-column>
+
+      </mj-section>
+    </mj-container>
   </mj-body>
 </mjml>
