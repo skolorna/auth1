@@ -134,7 +134,7 @@ impl FromStr for Chain {
 
 impl sqlx::Encode<'_, sqlx::Postgres> for Chain {
     fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> IsNull {
-        self.to_string().encode(buf)
+        <String as sqlx::Encode<'_, sqlx::Postgres>>::encode(self.to_string(), buf)
     }
 }
 

@@ -15,12 +15,12 @@ pub enum Error {
     Lettre(lettre::error::Error),
     Smtp(lettre::transport::smtp::Error),
     EmailInUse,
-    PasswordRequired,
     InvalidRefreshToken(InvalidTokenReason),
     InvalidAccessToken(InvalidTokenReason),
     InvalidEmailToken(InvalidTokenReason),
     InvalidResetToken(InvalidTokenReason),
-    WrongEmailPassword,
+    InvalidOobToken(InvalidTokenReason),
+    AccountNotFound,
 }
 
 impl Display for Error {
@@ -30,12 +30,12 @@ impl Display for Error {
                 f.write_str("an internal error occurred")
             }
             Self::EmailInUse => f.write_str("email already in use"),
-            Self::PasswordRequired => f.write_str("password required"),
             Self::InvalidRefreshToken(r) => write!(f, "invalid refresh token: {r}"),
             Self::InvalidAccessToken(r) => write!(f, "invalid access token: {r}"),
             Self::InvalidEmailToken(r) => write!(f, "invalid email token: {r}"),
             Self::InvalidResetToken(r) => write!(f, "invalid reset token: {r}"),
-            Self::WrongEmailPassword => f.write_str("wrong email or password"),
+            Self::InvalidOobToken(r) => write!(f, "invalid oob token: {r}"),
+            Self::AccountNotFound => f.write_str("no account found"),
         }
     }
 }
@@ -49,12 +49,12 @@ impl Error {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             Self::EmailInUse => StatusCode::CONFLICT,
-            Self::PasswordRequired => StatusCode::BAD_REQUEST,
             Self::InvalidRefreshToken(_) => StatusCode::UNAUTHORIZED,
             Self::InvalidAccessToken(_) => StatusCode::UNAUTHORIZED,
             Self::InvalidEmailToken(_) => StatusCode::BAD_REQUEST,
             Self::InvalidResetToken(_) => StatusCode::BAD_REQUEST,
-            Self::WrongEmailPassword => StatusCode::UNAUTHORIZED,
+            Self::InvalidOobToken(_) => StatusCode::BAD_REQUEST,
+            Self::AccountNotFound => StatusCode::BAD_REQUEST,
         }
     }
 
@@ -63,7 +63,7 @@ impl Error {
     }
 
     pub const fn email_not_in_use() -> Self {
-        Self::WrongEmailPassword
+        Self::AccountNotFound
     }
 
     pub const fn email_in_use() -> Self {
@@ -96,6 +96,20 @@ impl From<lettre::transport::smtp::Error> for Error {
     fn from(e: lettre::transport::smtp::Error) -> Self {
         error!("smtp error: {e}");
         Error::Smtp(e)
+    }
+}
+
+impl From<lettre::transport::file::Error> for Error {
+    fn from(e: lettre::transport::file::Error) -> Self {
+        error!("file email transport error: {e}");
+        Error::Internal
+    }
+}
+
+impl From<handlebars::RenderError> for Error {
+    fn from(e: handlebars::RenderError) -> Self {
+        error!("handlebars render error: {e}");
+        Error::Internal
     }
 }
 

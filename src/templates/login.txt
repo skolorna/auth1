@@ -1,0 +1,9 @@
+********************
+Logga in på Skolorna
+********************
+
+Godkänn inloggningsförfrågan ({{ url }})
+
+Om länken inte fungerar kan du ange följande kod:
+
+{{ otp }}

@@ -6,7 +6,7 @@ use tracing::error;
 
 use crate::http::{Error, Result};
 
-trait JwtResultExt<T> {
+pub(crate) trait JwtResultExt<T> {
     fn map_token_err(self, map_err: impl FnOnce(InvalidTokenReason) -> Error) -> Result<T>;
 }
 
@@ -211,115 +211,10 @@ pub mod access_token {
     }
 }
 
-pub mod email_token {
-    use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation};
-    use serde::{Deserialize, Serialize};
-    use sqlx::PgExecutor;
-    use tracing::instrument;
-    use uuid::Uuid;
-
-    use crate::http::{Error, Result};
-
-    use super::{decode_insecure, JwtResultExt};
-
-    fn gen_secret(email: &str, password_hash: &str) -> blake3::Hash {
-        let mut hasher = blake3::Hasher::new();
-        hasher.update(email.as_bytes());
-        hasher.update(password_hash.as_bytes());
-        hasher.finalize()
-    }
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct Claims {
-        pub email: String,
-        pub sub: Uuid,
-    }
-
-    pub fn sign(sub: Uuid, email: String, password_hash: &str) -> Result<String> {
-        let key = EncodingKey::from_secret(gen_secret(&email, password_hash).as_bytes());
-        let claims = Claims { sub, email };
-
-        jsonwebtoken::encode(&Header::default(), &claims, &key).map_token_err(|_| unreachable!())
-    }
-
-    #[instrument(skip(db))]
-    pub async fn verify(token: &str, db: impl PgExecutor<'_>) -> Result<()> {
-        let claims = decode_insecure::<Claims>(token)
-            .map_token_err(Error::InvalidEmailToken)?
-            .claims;
-
-        let (email, password_hash) =
-            sqlx::query_as::<_, (String, String)>("SELECT email, hash FROM users WHERE id = $1")
-                .bind(claims.sub)
-                .fetch_one(db)
-                .await?;
-        let key = DecodingKey::from_secret(gen_secret(&email, &password_hash).as_bytes());
-
-        jsonwebtoken::decode::<Claims>(token, &key, &Validation::default())
-            .map_token_err(Error::InvalidEmailToken)?;
-
-        Ok(())
-    }
-}
-
-pub mod reset_token {
-    use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation};
-    use serde::{Deserialize, Serialize};
-    use sqlx::PgExecutor;
-    use time::{Duration, OffsetDateTime};
-    use uuid::Uuid;
-
-    use crate::http::{Error, Result};
-
-    use super::{decode_insecure, JwtResultExt};
-
-    fn gen_secret(email: &str, password_hash: &str) -> blake3::Hash {
-        let mut hasher = blake3::Hasher::new();
-        hasher.update(email.as_bytes());
-        hasher.update(password_hash.as_bytes());
-        hasher.finalize()
-    }
-
-    pub const TTL: Duration = Duration::days(1);
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct Claims {
-        pub sub: Uuid,
-        pub exp: i64,
-    }
-
-    pub fn sign(sub: Uuid, email: &str, password_hash: &str) -> Result<String> {
-        let key = EncodingKey::from_secret(gen_secret(email, password_hash).as_bytes());
-        let exp = OffsetDateTime::now_utc() + TTL;
-        let claims = Claims {
-            sub,
-            exp: exp.unix_timestamp(),
-        };
-
-        jsonwebtoken::encode(&Header::default(), &claims, &key).map_err(|_| unreachable!())
-    }
-
-    pub async fn verify(token: &str, db: impl PgExecutor<'_>) -> Result<Claims> {
-        let claims = decode_insecure::<Claims>(token)
-            .map_token_err(Error::InvalidResetToken)?
-            .claims;
-
-        let (email, password_hash) =
-            sqlx::query_as::<_, (String, String)>("SELECT email, hash FROM users WHERE id = $1")
-                .bind(claims.sub)
-                .fetch_one(db)
-                .await?;
-        let key = DecodingKey::from_secret(gen_secret(&email, &password_hash).as_bytes());
-
-        jsonwebtoken::decode::<Claims>(token, &key, &Validation::default())
-            .map_token_err(Error::InvalidResetToken)?;
-
-        Ok(claims)
-    }
-}
-
-fn decode_insecure<T: DeserializeOwned>(token: &str) -> jsonwebtoken::errors::Result<TokenData<T>> {
+pub(crate) fn decode_insecure<T: DeserializeOwned>(
+    token: &str,
+) -> jsonwebtoken::errors::Result<TokenData<T>> {
     let mut validation = Validation::default();
     validation.insecure_disable_signature_validation();
-    jsonwebtoken::decode(token, &DecodingKey::from_secret(&[0]), &validation)
+    jsonwebtoken::decode(token, &DecodingKey::from_secret(&[]), &validation)
 }
