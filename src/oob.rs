@@ -27,7 +27,7 @@ pub const NONCE_LEN: usize = 64;
 
 pub type Nonce = [u8; NONCE_LEN];
 
-#[derive(Debug, SerializeDisplay, DeserializeFromStr, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, SerializeDisplay, DeserializeFromStr, PartialEq, Eq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Otp([u8; Self::LEN]);
 

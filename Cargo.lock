@@ -303,7 +303,7 @@ dependencies = [
 
 [[package]]
 name = "auth1"
-version = "0.2.11"
+version = "0.2.12"
 dependencies = [
  "anyhow",
  "arbitrary",
@@ -328,7 +328,6 @@ dependencies = [
  "serde",
  "serde_with",
  "sqlx",
- "strfmt",
  "thiserror",
  "time",
  "tokio",
@@ -2487,12 +2486,6 @@ dependencies = [
  "tokio",
  "tokio-rustls",
 ]
-
-[[package]]
-name = "strfmt"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26cdabcdab6da7e8c2ac1160e917ec83e78bbe3e10325e17d532718c67a4828f"
 
 [[package]]
 name = "stringprep"
