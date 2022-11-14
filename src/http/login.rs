@@ -54,7 +54,7 @@ async fn login(
     let secret = if let Some(secret) = secret {
         secret
     } else {
-        oob::update_secret(user, &mut tx).await?.to_vec() // suboptimal heap allocation
+        oob::update_secret(user, &mut tx).await?.to_vec() // suboptimal heap allocation?
     };
 
     let (token, otp) = oob::sign(user, oob::Band::Email, &email, &secret);

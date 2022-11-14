@@ -2,6 +2,7 @@ use axum::{response::IntoResponse, routing::get, Extension, Json, Router};
 use lettre::{message::Mailbox, Address};
 use serde::{Deserialize, Serialize};
 
+use time::OffsetDateTime;
 use tracing::instrument;
 use uuid::Uuid;
 
@@ -15,11 +16,15 @@ struct NewUser {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct UserJson {
+struct User {
     id: Uuid,
     email: String,
     full_name: String,
     verified: bool,
+    #[serde(with = "time::serde::rfc3339")]
+    created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339::option")]
+    last_login: Option<OffsetDateTime>,
 }
 
 #[instrument(skip_all)]
@@ -67,13 +72,10 @@ async fn register(
 }
 
 #[instrument(skip_all)]
-async fn get_current_user(
-    ctx: Extension<ApiContext>,
-    identity: Identity,
-) -> Result<Json<UserJson>> {
+async fn get_current_user(ctx: Extension<ApiContext>, identity: Identity) -> Result<Json<User>> {
     let user = sqlx::query_as!(
-        UserJson,
-        "SELECT id, email, verified, full_name FROM users WHERE id = $1",
+        User,
+        "SELECT id, email, verified, full_name, created_at, last_login FROM users WHERE id = $1",
         identity.claims.sub
     )
     .fetch_one(&ctx.db)

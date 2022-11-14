@@ -42,7 +42,7 @@ pub struct Config {
 
     /// OTP email login url template. Use `{otp}` in place of the one time password.
     #[clap(long, env)]
-    pub login_url: String,
+    pub login_url: email::LoginUrl,
 
     #[clap(env)]
     pub sentry_dsn: Option<Dsn>,
@@ -75,7 +75,7 @@ impl Config {
             email::Transport::File(AsyncFileTransport::new(dir))
         };
 
-        let mut templates = email::Templates::new();
+        let mut templates = email::Templates::new(self.login_url.clone());
 
         templates.insert(
             "login",
@@ -89,7 +89,6 @@ impl Config {
                 .expect("failed to parse default mailbox"),
             reply_to: None,
             transport,
-            login_url: self.login_url.clone(),
             templates,
         })
     }

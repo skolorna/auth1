@@ -1,9 +1,6 @@
-use std::collections::HashMap;
+use std::{fmt::Display, str::FromStr};
 
-use crate::{
-    http::{Error, Result},
-    oob::Otp,
-};
+use crate::{http::Result, oob::Otp};
 use handlebars::Handlebars;
 
 use lettre::{
@@ -11,7 +8,6 @@ use lettre::{
     AsyncFileTransport, AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
 use serde::Serialize;
-use strfmt::Format;
 use tracing::{debug, instrument};
 
 pub enum Transport {
@@ -36,18 +32,14 @@ impl Transport {
 
 pub struct Templates {
     hbs: Handlebars<'static>,
-}
-
-impl Default for Templates {
-    fn default() -> Self {
-        Self::new()
-    }
+    login_url: LoginUrl,
 }
 
 impl Templates {
-    pub fn new() -> Self {
+    pub fn new(login_url: LoginUrl) -> Self {
         Self {
             hbs: Handlebars::new(),
+            login_url,
         }
     }
 
@@ -64,12 +56,14 @@ impl Templates {
     }
 
     #[instrument(level = "debug", skip(self), ret)]
-    pub fn login(&self, url: &str, otp: Otp) -> Result<(String, String)> {
+    pub fn login(&self, otp: Otp) -> Result<(String, String)> {
         #[derive(Debug, Serialize)]
         struct Data<'a> {
             url: &'a str,
             otp: Otp,
         }
+
+        let url = &self.login_url.format(otp);
 
         let data = Data { url, otp };
 
@@ -80,11 +74,43 @@ impl Templates {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct LoginUrl {
+    before: String,
+    after: String,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub struct ParseLoginUrlError;
+
+impl Display for ParseLoginUrlError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "missing `{{otp}}`")
+    }
+}
+
+impl FromStr for LoginUrl {
+    type Err = ParseLoginUrlError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (before, after) = s.split_once("{otp}").ok_or(ParseLoginUrlError)?;
+        Ok(Self {
+            before: before.into(),
+            after: after.into(),
+        })
+    }
+}
+
+impl LoginUrl {
+    fn format(&self, otp: Otp) -> String {
+        format!("{}{otp}{}", self.before, self.after)
+    }
+}
+
 pub struct Client {
     pub(crate) from: Mailbox,
     pub(crate) reply_to: Option<Mailbox>,
     pub(crate) transport: Transport,
-    pub(crate) login_url: String,
     pub(crate) templates: Templates,
 }
 
@@ -104,22 +130,11 @@ impl Client {
 
         builder
     }
-
-    #[instrument(skip_all, fields(self.verification_url), err)]
-    pub fn login_url(&self, otp: &str) -> Result<String, strfmt::FmtError> {
-        let mut vars = HashMap::new();
-        vars.insert("otp".to_string(), otp);
-        self.login_url.format(&vars)
-    }
 }
 
 #[instrument(skip_all, fields(%to, first))]
 pub async fn send_login_email(client: &Client, to: Mailbox, otp: Otp) -> Result<()> {
-    let url = client
-        .login_url(&otp.to_string())
-        .map_err(|_| Error::internal())?;
-
-    let (html, plain) = client.templates.login(&url, otp)?;
+    let (html, plain) = client.templates.login(otp)?;
 
     let email = client
         .msg_builder()

@@ -33,44 +33,6 @@
     },
     "query": "UPDATE users SET oob_secret = $1 WHERE id = $2"
   },
-  "6685f8c2345afb2dc758a91d303c7d4c28a4e22e57e1e46d0790e584a6d08e71": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "email",
-          "ordinal": 1,
-          "type_info": "Varchar"
-        },
-        {
-          "name": "verified",
-          "ordinal": 2,
-          "type_info": "Bool"
-        },
-        {
-          "name": "full_name",
-          "ordinal": 3,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        false,
-        false,
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid"
-        ]
-      }
-    },
-    "query": "SELECT id, email, verified, full_name FROM users WHERE id = $1"
-  },
   "7e49fa000b8a680098f8861fb38e617ee37d4c1271cdf704fd276b4bba9508fd": {
     "describe": {
       "columns": [],
@@ -114,6 +76,68 @@
     },
     "query": "SELECT id, key FROM certificates WHERE naf > $1 ORDER BY naf ASC"
   },
+  "b82088b4a1fb594bbd8dc4391bd9dba7872a42187dff0658add64551610ce178": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "email",
+          "ordinal": 1,
+          "type_info": "Varchar"
+        },
+        {
+          "name": "verified",
+          "ordinal": 2,
+          "type_info": "Bool"
+        },
+        {
+          "name": "full_name",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 4,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "last_login",
+          "ordinal": 5,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT id, email, verified, full_name, created_at, last_login FROM users WHERE id = $1"
+  },
+  "c4dfb47f121e064c7f380a3bd5ab401b8ec56cb854df4ebb21ec46975b5f6e09": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "UPDATE users SET verified = true, last_login = NOW() WHERE id = $1"
+  },
   "d65e3e39fe153b8bb323030c970bcdec74d7aa82427e2f083631f1dc3e28258e": {
     "describe": {
       "columns": [
@@ -149,17 +173,5 @@
       }
     },
     "query": "INSERT INTO users (id, email, full_name, jwt_secret, oob_secret) VALUES ($1, $2, $3, $4, $5)"
-  },
-  "fc5315b422fb7de6618213bf401ce8944ba6749f8c6b2e037b800ca274ff8447": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Uuid"
-        ]
-      }
-    },
-    "query": "UPDATE users SET verified = true WHERE id = $1"
   }
 }

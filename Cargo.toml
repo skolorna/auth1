@@ -3,7 +3,7 @@ members = [".", "jwk", "sdk"]
 
 [package]
 name = "auth1"
-version = "0.2.11"
+version = "0.2.12"
 edition = "2021"
 
 [dependencies]
@@ -44,9 +44,8 @@ sqlx = { version = "0.6.2", features = [
   "time",
   "uuid",
 ] }
-strfmt = "0.2.2"
 thiserror = "1.0.37"
-time = "0.3.15"
+time = { version = "0.3.17", features = ["serde-human-readable"] }
 tokio = { version = "1.21.2", features = ["full"] }
 tower = { version = "0.4.13", default-features = false, features = ["tracing"] }
 tower-http = { version = "0.3.4", features = ["cors", "trace"] }
@@ -54,5 +53,3 @@ tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 uuid = { version = "1.2.1", features = ["v4", "serde"] }
 x509-parser = "0.14.0"
-
-[features]
