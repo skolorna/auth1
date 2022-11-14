@@ -70,9 +70,12 @@ async fn request_token(
                     .await?;
 
             if matches!(claims.band, oob::Band::Email) {
-                sqlx::query!("UPDATE users SET verified = true WHERE id = $1", claims.sub)
-                    .execute(&mut tx)
-                    .await?;
+                sqlx::query!(
+                    "UPDATE users SET verified = true, last_login = NOW() WHERE id = $1",
+                    claims.sub
+                )
+                .execute(&mut tx)
+                .await?;
             }
 
             oob::update_secret(claims.sub, &mut tx).await?;
