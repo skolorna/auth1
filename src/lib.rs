@@ -1,12 +1,17 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use anyhow::bail;
 use lettre::{
     transport::smtp::authentication::Credentials, AsyncFileTransport, AsyncSmtpTransport,
     Tokio1Executor,
 };
+use notify::{RecommendedWatcher, Watcher};
 use sentry::types::Dsn;
-use tracing::{info, warn};
+use tokio::sync::{mpsc, RwLock};
+use tracing::{error, info, warn};
 
 pub mod email;
 pub mod http;
@@ -16,9 +21,11 @@ pub mod x509;
 
 #[derive(clap::Parser)]
 pub struct Config {
+    /// PEM-encoded CA certificate chain.
     #[clap(long, env)]
     pub ca_cert: Option<PathBuf>,
 
+    /// PEM-encoded CA key.
     #[clap(long, env)]
     pub ca_key: Option<PathBuf>,
 
@@ -93,12 +100,77 @@ impl Config {
         })
     }
 
-    pub fn ca(&self) -> anyhow::Result<x509::Authority> {
+    pub fn ca(&self) -> anyhow::Result<Arc<RwLock<x509::Authority>>> {
         match (self.ca_cert.as_ref(), self.ca_key.as_ref()) {
-            (Some(cert), Some(key)) => x509::Authority::from_files(cert, key),
+            (Some(cert), Some(key)) => watch_ca(cert, key),
             (Some(_), None) => bail!("no key specified"),
             (None, Some(_)) => bail!("no certificate specified"),
-            (None, None) => x509::Authority::self_signed().map_err(Into::into),
+            (None, None) => x509::Authority::self_signed()
+                .map(|ca| Arc::new(RwLock::new(ca)))
+                .map_err(Into::into),
         }
     }
+}
+
+fn async_watcher() -> notify::Result<(
+    RecommendedWatcher,
+    mpsc::Receiver<notify::Result<notify::Event>>,
+)> {
+    let (tx, rx) = mpsc::channel(1);
+
+    let watcher = RecommendedWatcher::new(
+        move |res| tx.blocking_send(res).unwrap(),
+        notify::Config::default(),
+    )?;
+
+    Ok((watcher, rx))
+}
+
+fn watch_ca(cert: &Path, key: &Path) -> anyhow::Result<Arc<RwLock<x509::Authority>>> {
+    let ca = x509::Authority::from_files(cert, key)?;
+    let ca_arc = Arc::new(RwLock::new(ca));
+
+    let (mut watcher, mut rx) = async_watcher()?;
+
+    let cert = cert.to_owned();
+    let key = key.to_owned();
+
+    let ret = ca_arc.clone();
+
+    tokio::spawn(async move {
+        watcher
+            .watch(&cert, notify::RecursiveMode::Recursive)
+            .unwrap();
+        watcher
+            .watch(&key, notify::RecursiveMode::Recursive)
+            .unwrap();
+
+        while let Some(res) = rx.recv().await {
+            let e = match res {
+                Ok(e) => e,
+                Err(e) => {
+                    error!("notify error: {e}");
+                    continue;
+                }
+            };
+
+            if !e.kind.is_modify() {
+                continue;
+            }
+
+            match x509::Authority::from_files(&cert, &key) {
+                Ok(ca) => {
+                    *ca_arc.write().await = ca;
+                    info!("reloaded certificate authority");
+                }
+                Err(e) => {
+                    warn!("failed to reload certificate authority: {e}");
+                }
+            };
+        }
+
+        panic!("channel closed");
+    });
+
+    Ok(ret)
 }

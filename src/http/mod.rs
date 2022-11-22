@@ -4,6 +4,7 @@ use axum::{response::IntoResponse, routing::get, Extension, Json, Router};
 use serde::Serialize;
 use sqlx::PgPool;
 use std::{net::SocketAddr, sync::Arc};
+use tokio::sync::RwLock;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 use crate::{email, x509, Config};
@@ -23,7 +24,7 @@ pub type Result<T, E = Error> = core::result::Result<T, E>;
 struct ApiContext {
     db: PgPool,
     email: Arc<email::Client>,
-    ca: Arc<x509::Authority>,
+    ca: Arc<RwLock<x509::Authority>>,
 }
 
 pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
@@ -38,7 +39,7 @@ pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
         .context("serve failed")
 }
 
-pub fn app(db: PgPool, email: email::Client, ca: x509::Authority) -> Router {
+pub fn app(db: PgPool, email: email::Client, ca: Arc<RwLock<x509::Authority>>) -> Router {
     Router::new()
         .nest("/account", account::routes())
         .nest("/keys", keys::routes())
@@ -47,7 +48,7 @@ pub fn app(db: PgPool, email: email::Client, ca: x509::Authority) -> Router {
         .layer(Extension(ApiContext {
             db,
             email: Arc::new(email),
-            ca: Arc::new(ca),
+            ca,
         }))
         .layer(sentry_tower::NewSentryLayer::new_from_top())
         .layer(sentry_tower::SentryHttpLayer::with_transaction())

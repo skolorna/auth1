@@ -19,6 +19,8 @@ async fn list(ctx: Extension<ApiContext>) -> Result<impl IntoResponse> {
     let mut conn = ctx.db.acquire().await?;
 
     ctx.ca
+        .read()
+        .await
         .sig_key_foresight(&mut conn, JWKS_CACHE_TTL * 2)
         .await?;
 
