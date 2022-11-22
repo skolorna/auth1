@@ -62,8 +62,8 @@ impl Chain {
         self.0.iter()
     }
 
-    pub fn last(&self) -> Option<&X509> {
-        self.0.last()
+    pub fn last(&self) -> &X509 {
+        self.0.last().unwrap()
     }
 
     pub fn from_pem_bundle(bundle: impl BufRead + Seek) -> anyhow::Result<Self> {
@@ -170,6 +170,14 @@ impl Authority {
         let key = PKey::private_key_from_pem(&fs::read(key)?)
             .with_context(|| format!("failed to parse private key at {key:?}"))?;
 
+        if chain.is_empty() {
+            bail!("empty certificate chain");
+        }
+
+        if !chain.last().public_key()?.public_eq(&key) {
+            bail!("certificate public key doesn't match private key");
+        }
+
         Ok(Self { chain, key })
     }
 
@@ -199,14 +207,7 @@ impl Authority {
         let key = EcKey::generate(&group)?;
         let key = PKey::from_ec_key(key)?;
 
-        let x509 = sign_leaf(
-            &subject,
-            nbf,
-            naf,
-            &key,
-            self.chain.last().unwrap(),
-            &self.key,
-        )?;
+        let x509 = sign_leaf(&subject, nbf, naf, &key, self.chain.last(), &self.key)?;
 
         Ok(Certificate {
             id,

@@ -144,10 +144,13 @@ pub mod refresh_token {
 }
 
 pub mod access_token {
+    use std::sync::Arc;
+
     use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
     use openssl::x509::X509;
     use sqlx::{PgConnection, PgExecutor};
     use time::{Duration, OffsetDateTime};
+    use tokio::sync::RwLock;
     use tracing::instrument;
     use uuid::Uuid;
 
@@ -164,8 +167,12 @@ pub mod access_token {
     pub type Claims = auth1_sdk::AccessTokenClaims;
 
     #[instrument(skip(ca, db))]
-    pub async fn sign(sub: Uuid, ca: &x509::Authority, db: &mut PgConnection) -> Result<String> {
-        let (kid, key) = ca.get_sig_key(db).await?;
+    pub async fn sign(
+        sub: Uuid,
+        ca: &Arc<RwLock<x509::Authority>>,
+        db: &mut PgConnection,
+    ) -> Result<String> {
+        let (kid, key) = ca.read().await.get_sig_key(db).await?;
         let key = EncodingKey::from_ec_pem(&key).map_token_err(|_| unreachable!())?;
 
         let header = Header {

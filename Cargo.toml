@@ -30,6 +30,7 @@ lettre = { version = "0.10.1", default-features = false, features = [
   "pool",
 ] }
 mrml = "1.2.10"
+notify = "5.0.0"
 openssl = "0.10.42"
 rand = "0.8.5"
 sentry = "0.27.0"

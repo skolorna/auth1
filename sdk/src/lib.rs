@@ -20,7 +20,7 @@ mod error;
 
 pub use error::*;
 
-pub const JWKS_URL: &str = "https://api-staging.skolorna.com/v0/auth/keys";
+pub const JWKS_URL: &str = "https://api.skolorna.com/v0/auth/keys";
 pub const TIMEOUT: Duration = Duration::from_secs(5);
 
 type Result<T, E = Error> = core::result::Result<T, E>;
@@ -142,5 +142,18 @@ impl KeyStore {
         debug!(uid=%claims.sub, "verified token");
 
         Ok(claims)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::KeyStore;
+
+    #[tokio::test]
+    async fn jwks() {
+        let ks = KeyStore::default();
+        let set = ks.jwks().await.unwrap();
+
+        assert!(!set.keys.is_empty());
     }
 }
