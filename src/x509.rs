@@ -10,7 +10,8 @@ use anyhow::{bail, Context};
 use base64::display::Base64Display;
 
 use openssl::{
-    asn1::Asn1Time,
+    asn1::{Asn1Integer, Asn1Time},
+    bn::BigNum,
     ec::{EcGroup, EcKey},
     error::ErrorStack,
     hash::MessageDigest,
@@ -62,8 +63,9 @@ impl Chain {
         self.0.iter()
     }
 
-    pub fn last(&self) -> &X509 {
-        self.0.last().unwrap()
+    /// Get the first (leaf) certificate in the chain.
+    pub fn first(&self) -> &X509 {
+        self.0.first().unwrap()
     }
 
     pub fn from_pem_bundle(bundle: impl BufRead + Seek) -> anyhow::Result<Self> {
@@ -80,8 +82,8 @@ impl Chain {
     pub fn verify(&self) -> Result<bool, openssl::error::ErrorStack> {
         let mut iter = self.0.windows(2);
 
-        while let Some([left, right]) = iter.next() {
-            if !left.verify(right.public_key()?.as_ref())? {
+        while let Some([cert, issuer]) = iter.next() {
+            if !cert.verify(issuer.public_key()?.as_ref())? {
                 return Ok(false);
             }
         }
@@ -158,23 +160,23 @@ pub struct Authority {
 }
 
 impl Authority {
-    /// Construct an authority from PEM-encoded files.
+    /// Attempt to construct a certificate authority from PEM-encoded files.
     pub fn from_files(cert_chain: &Path, key: &Path) -> anyhow::Result<Self> {
-        let cert = BufReader::new(File::open(cert_chain)?);
+        let cert = BufReader::new(File::open(cert_chain).context("failed to read certificate")?);
         let chain = Chain::from_pem_bundle(cert)?;
 
         if !chain.verify()? {
             bail!("invalid certificate chain");
         };
 
-        let key = PKey::private_key_from_pem(&fs::read(key)?)
-            .with_context(|| format!("failed to parse private key at {key:?}"))?;
+        let key = PKey::private_key_from_pem(&fs::read(key).context("failed to read private key")?)
+            .context("failed to parse private key")?;
 
         if chain.is_empty() {
             bail!("empty certificate chain");
         }
 
-        if !chain.last().public_key()?.public_eq(&key) {
+        if !chain.first().public_key()?.public_eq(&key) {
             bail!("certificate public key doesn't match private key");
         }
 
@@ -197,7 +199,7 @@ impl Authority {
         let id = Uuid::new_v4();
 
         let mut subject = X509Name::builder()?;
-        subject.append_entry_by_nid(Nid::COMMONNAME, &id.to_string())?;
+        subject.append_entry_by_nid(Nid::COMMONNAME, "Auth1")?;
         let subject = subject.build();
 
         let nbf = OffsetDateTime::now_utc();
@@ -207,7 +209,7 @@ impl Authority {
         let key = EcKey::generate(&group)?;
         let key = PKey::from_ec_key(key)?;
 
-        let x509 = sign_leaf(&subject, nbf, naf, &key, self.chain.last(), &self.key)?;
+        let x509 = sign_leaf(&subject, id, nbf, naf, &key, self.chain.first(), &self.key)?;
 
         Ok(Certificate {
             id,
@@ -340,8 +342,14 @@ fn gen_self_signed(cn: &str, pkey: &PKeyRef<impl HasPrivate>) -> Result<X509, Er
     Ok(builder.build())
 }
 
+///
+fn u128_asn1_int(n: u128) -> Result<Asn1Integer, ErrorStack> {
+    BigNum::from_slice(&n.to_be_bytes())?.to_asn1_integer()
+}
+
 fn sign_leaf(
     subject: &X509NameRef,
+    sn: Uuid,
     nbf: OffsetDateTime,
     naf: OffsetDateTime,
     pubkey: &PKeyRef<impl HasPublic>,
@@ -358,6 +366,7 @@ fn sign_leaf(
     builder.set_not_before(&nbf)?;
     builder.set_not_after(&naf)?;
     builder.set_pubkey(pubkey)?;
+    builder.set_serial_number(u128_asn1_int(sn.as_u128())?.as_ref())?;
 
     let ctx = builder.x509v3_context(Some(ca), None);
     let skey = SubjectKeyIdentifier::new().critical().build(&ctx)?;
@@ -375,4 +384,19 @@ fn sign_leaf(
     builder.sign(ca_pkey, MessageDigest::sha256())?;
 
     Ok(builder.build())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Authority;
+
+    #[test]
+    fn sign_cert() -> anyhow::Result<()> {
+        let ca = Authority::self_signed()?;
+        let leaf = ca.gen_leaf()?;
+
+        assert!(leaf.x509.verify(ca.chain.first().public_key()?.as_ref())?);
+
+        Ok(())
+    }
 }
