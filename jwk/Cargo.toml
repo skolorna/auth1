@@ -10,7 +10,7 @@ der = { version = "0.6.0", features = ["oid", "derive", "alloc"] }
 jsonwebtoken = "8.1.1"
 openssl = "0.10.42"
 serde = { version = "1.0.145", features = ["derive"] }
-serde_with = { version = "2.0.0", features = ["base64"] }
+serde_with = { version = "2.2.0", features = ["base64"] }
 
 [features]
 fuzz = ["dep:arbitrary"]
