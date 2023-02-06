@@ -9,7 +9,6 @@ use lettre::{
     Tokio1Executor,
 };
 use notify::{RecommendedWatcher, Watcher};
-use sentry::types::Dsn;
 use tokio::sync::{mpsc, RwLock};
 use tracing::{error, info, warn};
 
@@ -51,11 +50,8 @@ pub struct Config {
     #[clap(long, env)]
     pub login_url: email::LoginUrl,
 
-    #[clap(env)]
-    pub sentry_dsn: Option<Dsn>,
-
-    #[clap(env)]
-    pub sentry_environment: Option<String>,
+    #[clap(env, default_value = "http://localhost:4317")]
+    pub otlp_endpoint: String,
 
     #[clap(env, default_value = "1.0")]
     pub traces_sample_rate: f32,

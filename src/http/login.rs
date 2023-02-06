@@ -30,9 +30,9 @@ impl IntoResponse for LoginResponse {
 }
 
 async fn login(
-    Json(LoginRequest { email }): Json<LoginRequest>,
     ctx: Extension<ApiContext>,
-) -> Result<impl IntoResponse> {
+    Json(LoginRequest { email }): Json<LoginRequest>,
+) -> Result<LoginResponse> {
     let mut tx = ctx.db.begin().await?;
 
     let (full_name, user, secret) = sqlx::query_as::<_, (String, Uuid, Option<Vec<u8>>)>(

@@ -1,10 +1,11 @@
 use axum::{
     async_trait,
-    extract::{rejection::TypedHeaderRejection, FromRequest, RequestParts},
+    extract::{rejection::TypedHeaderRejection, FromRequestParts},
     headers::{authorization::Bearer, Authorization},
     response::{IntoResponse, Response},
     Extension, TypedHeader,
 };
+use http::request::Parts;
 
 use crate::{Identity, KeyStore};
 
@@ -32,18 +33,19 @@ impl From<crate::Error> for IdentityRejection {
 }
 
 #[async_trait]
-impl<B> FromRequest<B> for Identity
+impl<S> FromRequestParts<S> for Identity
 where
-    B: Send,
+    S: Send + Sync,
 {
     type Rejection = IdentityRejection;
 
-    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
-        let TypedHeader(authorization) = TypedHeader::<Authorization<Bearer>>::from_request(req)
-            .await
-            .map_err(IdentityRejection::InvalidHeader)?;
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let TypedHeader(authorization) =
+            TypedHeader::<Authorization<Bearer>>::from_request_parts(parts, state)
+                .await
+                .map_err(IdentityRejection::InvalidHeader)?;
 
-        let Extension(store) = Extension::<KeyStore>::from_request(req)
+        let Extension(store) = Extension::<KeyStore>::from_request_parts(parts, state)
             .await
             .expect("missing KeyStore extension in request");
 

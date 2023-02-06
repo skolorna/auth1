@@ -265,7 +265,7 @@ impl Authority {
     /// needed for access token generation, in order to make sure caches are up-to-date.
     ///
     /// `foresight` is the amount of time *in addition to* the access token TTL.
-    #[instrument(skip(self, db))]
+    #[instrument(skip_all, fields(%foresight))]
     pub async fn sig_key_foresight(
         &self,
         db: &mut PgConnection,

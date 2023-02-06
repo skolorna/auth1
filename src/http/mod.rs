@@ -1,11 +1,12 @@
 use anyhow::Context;
 use axum::{response::IntoResponse, routing::get, Extension, Json, Router};
 
+use axum_tracing_opentelemetry::opentelemetry_tracing_layer;
 use serde::Serialize;
 use sqlx::PgPool;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use tower_http::cors::CorsLayer;
 
 use crate::{email, x509, Config};
 
@@ -50,11 +51,9 @@ pub fn app(db: PgPool, email: email::Client, ca: Arc<RwLock<x509::Authority>>) -
             email: Arc::new(email),
             ca,
         }))
-        .layer(sentry_tower::NewSentryLayer::new_from_top())
-        .layer(sentry_tower::SentryHttpLayer::with_transaction())
-        .route("/health", get(health)) // don't send health transactions to Sentry
+        .layer(opentelemetry_tracing_layer())
+        .route("/health", get(health))
         .layer(CorsLayer::very_permissive())
-        .layer(TraceLayer::new_for_http())
 }
 
 #[derive(Debug, Serialize)]
