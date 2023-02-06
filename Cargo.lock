@@ -315,7 +315,7 @@ dependencies = [
  "auth1-sdk",
  "axum",
  "axum-tracing-opentelemetry",
- "base64 0.13.1",
+ "base64 0.21.0",
  "blake3",
  "clap",
  "data-encoding",
@@ -1510,7 +1510,7 @@ name = "jwk"
 version = "0.1.0"
 dependencies = [
  "arbitrary",
- "base64 0.13.1",
+ "base64 0.21.0",
  "der",
  "jsonwebtoken",
  "openssl",
