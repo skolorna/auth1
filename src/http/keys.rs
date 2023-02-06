@@ -5,7 +5,6 @@ use futures::TryStreamExt;
 use jwk::{Jwk, X509Ext};
 use openssl::x509::X509;
 use time::Duration;
-use tracing::instrument;
 use uuid::Uuid;
 
 use crate::x509;
@@ -14,7 +13,6 @@ use super::{ApiContext, Error, Result};
 
 const JWKS_CACHE_TTL: Duration = Duration::seconds(15);
 
-#[instrument(skip_all)]
 async fn list(ctx: Extension<ApiContext>) -> Result<impl IntoResponse> {
     let mut conn = ctx.db.acquire().await?;
 

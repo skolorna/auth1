@@ -1,9 +1,13 @@
-use std::{sync::Arc, time::Duration};
+use std::{str::FromStr, sync::Arc, time::Duration};
 
 use cache_control::CacheControl;
 use jsonwebtoken::Validation;
 use jwk::Jwk;
-use reqwest::{Client, IntoUrl, Url};
+use opentelemetry::propagation::Injector;
+use reqwest::{
+    header::{HeaderMap, HeaderName},
+    Client, IntoUrl, Url,
+};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, time::Instant};
 #[cfg(feature = "tracing")]
@@ -90,7 +94,12 @@ impl KeyStore {
 
         let mut writer = self.cache.write().await;
 
-        let res = self.client.get(self.jwks_url.clone()).send().await?;
+        let res = self
+            .client
+            .get(self.jwks_url.clone())
+            .headers(inject_context())
+            .send()
+            .await?;
 
         let headers = res.headers();
 
@@ -101,12 +110,13 @@ impl KeyStore {
         let cc = CacheControl::from_value(cc);
         let max_age = cc.and_then(|cc| cc.max_age).unwrap_or_default();
 
-        let age = headers
-            .get("age")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|s| s.parse().ok())
-            .unwrap_or_default();
-        let age = Duration::from_secs(age);
+        let age = Duration::from_secs(
+            headers
+                .get("age")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.parse().ok())
+                .unwrap_or_default(),
+        );
 
         let exp = Instant::now() + max_age - age;
 
@@ -143,6 +153,28 @@ impl KeyStore {
 
         Ok(claims)
     }
+}
+
+fn inject_context() -> HeaderMap {
+    struct HeaderInjector<'a>(&'a mut HeaderMap);
+
+    impl Injector for HeaderInjector<'_> {
+        fn set(&mut self, key: &str, value: String) {
+            if let Ok(key) = HeaderName::from_str(key) {
+                if let Ok(value) = value.parse() {
+                    self.0.insert(key, value);
+                }
+            }
+        }
+    }
+
+    let mut headers = HeaderMap::new();
+
+    opentelemetry::global::get_text_map_propagator(|propagator| {
+        propagator.inject(&mut HeaderInjector(&mut headers));
+    });
+
+    headers
 }
 
 #[cfg(test)]
