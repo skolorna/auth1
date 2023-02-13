@@ -50,6 +50,38 @@
     },
     "query": "INSERT INTO certificates (id, x509, chain, key, nbf, naf) VALUES ($1, $2, $3, $4, $5, $6)"
   },
+  "a1bb9ca4884a048f1ebee413c4c3047072bab93dc4b2c5043cb394dfe59a6a95": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "full_name",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 2,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT id, full_name, created_at FROM users WHERE id = $1"
+  },
   "a5e0ae0b5ef894a187529b1c30363337978b8bc41ff6c9c4efa3c0ec864abed2": {
     "describe": {
       "columns": [

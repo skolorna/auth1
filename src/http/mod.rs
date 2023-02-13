@@ -16,6 +16,7 @@ mod extract;
 mod keys;
 mod login;
 mod token;
+mod users;
 
 pub use error::Error;
 
@@ -44,6 +45,7 @@ pub fn app(db: PgPool, email: email::Client, ca: Arc<RwLock<x509::Authority>>) -
     Router::new()
         .nest("/account", account::routes())
         .nest("/keys", keys::routes())
+        .nest("/users", users::routes())
         .nest("/token", token::routes())
         .nest("/login", login::routes())
         .layer(Extension(ApiContext {
