@@ -308,7 +308,7 @@ dependencies = [
 
 [[package]]
 name = "auth1"
-version = "0.2.16"
+version = "0.2.17"
 dependencies = [
  "anyhow",
  "arbitrary",
@@ -349,7 +349,7 @@ dependencies = [
 
 [[package]]
 name = "auth1-sdk"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "actix-web",
  "actix-web-httpauth",

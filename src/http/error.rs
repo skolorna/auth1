@@ -21,6 +21,7 @@ pub enum Error {
     InvalidResetToken(InvalidTokenReason),
     InvalidOobToken(InvalidTokenReason),
     AccountNotFound,
+    Forbidden,
 }
 
 impl Display for Error {
@@ -36,6 +37,7 @@ impl Display for Error {
             Self::InvalidResetToken(r) => write!(f, "invalid reset token: {r}"),
             Self::InvalidOobToken(r) => write!(f, "invalid oob token: {r}"),
             Self::AccountNotFound => f.write_str("no account found"),
+            Self::Forbidden => f.write_str("forbidden"),
         }
     }
 }
@@ -55,6 +57,7 @@ impl Error {
             Self::InvalidResetToken(_) => StatusCode::BAD_REQUEST,
             Self::InvalidOobToken(_) => StatusCode::BAD_REQUEST,
             Self::AccountNotFound => StatusCode::BAD_REQUEST,
+            Self::Forbidden => StatusCode::FORBIDDEN,
         }
     }
 

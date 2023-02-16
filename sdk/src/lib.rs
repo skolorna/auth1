@@ -33,6 +33,12 @@ pub struct Identity {
     pub claims: AccessTokenClaims,
 }
 
+impl Identity {
+    pub fn id(&self) -> Uuid {
+        self.claims.sub
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccessTokenClaims {
     pub sub: Uuid,
