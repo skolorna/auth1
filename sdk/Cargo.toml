@@ -10,7 +10,7 @@ axum = { version = "0.6", default-features = false, optional = true, features = 
 cache_control = "0.2"
 futures-core = "0.3"
 futures-util = "0.3"
-http = { version = "0.2.8", optional = true }
+http = { version = "0.2.9", optional = true }
 jsonwebtoken = "8.1.1"
 jwk = { path = "../jwk" }
 opentelemetry = "0.18"
