@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{bail, Context};
-use base64::display::Base64Display;
+use base64::{display::Base64Display, Engine};
 
 use openssl::{
     asn1::{Asn1Integer, Asn1Time},
@@ -41,7 +41,7 @@ use crate::{
 pub struct Chain(Vec<X509>);
 
 impl Chain {
-    const BASE64_CONFIG: base64::Config = base64::STANDARD;
+    const B64_ENGINE: base64::engine::GeneralPurpose = base64::engine::general_purpose::STANDARD;
 
     pub fn new() -> Self {
         Self::default()
@@ -96,11 +96,7 @@ impl Display for Chain {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for cert in &self.0 {
             let der = cert.to_der()?;
-            writeln!(
-                f,
-                "{}",
-                Base64Display::with_config(&der, Chain::BASE64_CONFIG)
-            )?;
+            writeln!(f, "{}", Base64Display::new(&der, &Self::B64_ENGINE))?;
         }
 
         Ok(())
@@ -127,7 +123,7 @@ impl FromStr for Chain {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         s.lines().try_fold(Self::new(), |mut chain, line| {
-            let der = base64::decode_config(line, Chain::BASE64_CONFIG)?;
+            let der = Self::B64_ENGINE.decode(line)?;
             chain.push(X509::from_der(&der)?);
             Ok(chain)
         })
