@@ -6,8 +6,12 @@ use time::OffsetDateTime;
 use tracing::instrument;
 use uuid::Uuid;
 
-use super::{extract::Identity, login::LoginResponse, ApiContext, Error, Result};
-use crate::{email::send_login_email, jwt::refresh_token, oob};
+use super::{extract::Identity, login::LoginResponse, ApiContext, Result};
+use crate::{
+    email::send_login_email,
+    oob,
+    util::{create_user, CreatedUser},
+};
 
 #[derive(Debug, Deserialize)]
 struct NewUser {
@@ -32,32 +36,17 @@ async fn register(
     ctx: Extension<ApiContext>,
     Json(req): Json<NewUser>,
 ) -> Result<impl IntoResponse> {
-    let uid = Uuid::new_v4();
-    let jwt_secret = refresh_token::gen_secret();
-
     let mut tx = ctx.db.begin().await?;
 
     let email = req.email.to_string();
-    let oob_secret = oob::gen_secret();
 
-    sqlx::query!(
-        r#"INSERT INTO users (id, email, full_name, jwt_secret, oob_secret) VALUES ($1, $2, $3, $4, $5)"#,
-        uid,
-        &email,
-        req.full_name,
-        &jwt_secret,
-        &oob_secret,
-    )
-    .execute(&mut tx)
-    .await
-    .map_err(|e| match e {
-        sqlx::Error::Database(dbe) if dbe.constraint() == Some("users_email_key") => {
-            Error::email_in_use()
-        }
-        e => e.into(),
-    })?;
+    let CreatedUser {
+        id,
+        jwt_secret: _,
+        oob_secret,
+    } = create_user(&email, Some(&req.full_name), &mut tx).await?;
 
-    let (token, otp) = oob::sign(uid, oob::Band::Email, email.as_bytes(), &oob_secret);
+    let (token, otp) = oob::sign(id, oob::Band::Email, email.as_bytes(), &oob_secret);
 
     send_login_email(
         &ctx.email,
