@@ -20,6 +20,32 @@
     },
     "query": "SELECT COUNT(1) FROM certificates WHERE naf > $1"
   },
+  "61d5e0975cc811337a3a41c4e387c111cb56c6f12599c67c34470248f5e2d7f7": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "jwt_secret",
+          "ordinal": 1,
+          "type_info": "Bytea"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "SELECT id, jwt_secret FROM users WHERE email = $1"
+  },
   "647e425cc8e9ddb41958c7f8a6e453759877df48eab4e66034c71676c3a3380d": {
     "describe": {
       "columns": [],

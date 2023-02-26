@@ -8,7 +8,7 @@ use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
 
-use crate::{email, x509, Config};
+use crate::{email, oidc::OIDC, x509, Config};
 
 mod account;
 mod error;
@@ -20,20 +20,23 @@ mod users;
 
 pub use error::Error;
 
+pub use token::TokenResponse;
+
 pub type Result<T, E = Error> = core::result::Result<T, E>;
 
 #[derive(Clone)]
-struct ApiContext {
+pub struct ApiContext {
     db: PgPool,
     email: Arc<email::Client>,
     ca: Arc<RwLock<x509::Authority>>,
+    oidc: Arc<OIDC>,
 }
 
 pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
     let client = config.email_client()?;
     let ca = config.ca()?;
 
-    let app = app(db, client, ca);
+    let app = app(db, client, ca, config.oidc().await?);
 
     axum::Server::bind(&SocketAddr::from(([0, 0, 0, 0], 8000)))
         .serve(app.into_make_service())
@@ -41,7 +44,12 @@ pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
         .context("serve failed")
 }
 
-pub fn app(db: PgPool, email: email::Client, ca: Arc<RwLock<x509::Authority>>) -> Router {
+pub fn app(
+    db: PgPool,
+    email: email::Client,
+    ca: Arc<RwLock<x509::Authority>>,
+    oidc: OIDC,
+) -> Router {
     Router::new()
         .nest("/account", account::routes())
         .nest("/keys", keys::routes())
@@ -52,6 +60,7 @@ pub fn app(db: PgPool, email: email::Client, ca: Arc<RwLock<x509::Authority>>) -
             db,
             email: Arc::new(email),
             ca,
+            oidc: Arc::new(oidc),
         }))
         .layer(opentelemetry_tracing_layer())
         .route("/health", get(health))

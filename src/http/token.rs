@@ -3,11 +3,13 @@ use axum::{
     routing::post,
     Extension, Form, Json, Router,
 };
+use openidconnect::core::CoreIdToken;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
 use crate::{
     jwt::{access_token, refresh_token},
+    oidc::{create_or_login_oidc_user, Provider},
     oob::{self, Otp},
 };
 
@@ -16,8 +18,18 @@ use super::{ApiContext, Result};
 #[derive(Debug, Deserialize)]
 #[serde(tag = "grant_type", rename_all = "snake_case")]
 enum TokenRequest {
-    Otp { token: String, otp: Otp },
-    RefreshToken { refresh_token: String },
+    Otp {
+        token: String,
+        otp: Otp,
+    },
+    RefreshToken {
+        refresh_token: String,
+    },
+    IdToken {
+        id_token: Box<CoreIdToken>,
+        nonce: openidconnect::Nonce,
+        provider: Provider,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -92,6 +104,19 @@ async fn request_token(
                 access_token: access_token::sign(claims.sub, &ctx.ca, &mut tx).await?,
                 refresh_token: None,
             }
+        }
+        TokenRequest::IdToken {
+            id_token,
+            nonce,
+            provider,
+        } => {
+            let client = ctx.oidc.get_client(&provider);
+
+            let claims = id_token
+                .into_claims(&client.id_token_verifier(), &nonce)
+                .unwrap();
+
+            create_or_login_oidc_user(claims, &ctx.ca, &mut tx).await?
         }
     };
 

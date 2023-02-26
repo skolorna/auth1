@@ -66,6 +66,66 @@ async fn login(
     Ok(LoginResponse { token })
 }
 
+// async fn oauth_login(
+//     ctx: Extension<ApiContext>,
+//     cookie_jar: CookieJar,
+// ) -> Result<impl IntoResponse> {
+//     let client = &ctx.oidc.google;
+
+//     let (url, csrf_token, _nonce) = client.authorize_url(
+//             AuthenticationFlow::<CoreResponseType>::AuthorizationCode,
+//             CsrfToken::new_random,
+//             Nonce::new_random,
+//         )
+//         .add_scope(Scope::new("email".to_owned()))
+//         .add_scope(Scope::new("profile".to_owned()))
+//         .url();
+
+//     let csrf_cookie = Cookie::new("CSRF_TOKEN", csrf_token.secret().clone());
+
+//     Ok((
+//         StatusCode::SEE_OTHER,
+//         [(LOCATION, HeaderValue::try_from(url.as_str()).unwrap())],
+//         cookie_jar.add(csrf_cookie),
+//     ))
+// }
+
+// #[derive(Debug, Deserialize)]
+// struct CallbackParameters {
+//     code: AuthorizationCode,
+//     state: CsrfToken,
+// }
+
+// async fn oauth_callback(
+//     ctx: Extension<ApiContext>,
+//     Query(query): Query<CallbackParameters>,
+//     cookie_jar: CookieJar,
+// ) -> Result<impl IntoResponse> {
+//     if cookie_jar.get("CSRF_TOKEN").ok_or(Error::OIDC)?.value() != query.state.secret() {
+//         error!("csrf token mismatch");
+//         return Err(Error::OIDC);
+//     }
+
+//     let client = &ctx.oidc.google;
+
+//     let res = client
+//         .exchange_code(query.code)
+//         .request_async(async_http_client)
+//         .await?;
+
+//     let claims: CoreUserInfoClaims = client
+//         .user_info(res.access_token().clone(), None)
+//         .unwrap()
+//         .request_async(async_http_client)
+//         .await?;
+
+//     // create_or_login_oidc_user(claims, &ctx.ca, ctx.db).await?;
+
+//     Ok(())
+// }
+
 pub fn routes() -> Router {
     Router::new().route("/", post(login))
+    // .route("/google", get(oauth_login))
+    // .route("/google/code", get(oauth_callback))
 }
