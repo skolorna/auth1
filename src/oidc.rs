@@ -59,6 +59,10 @@ pub async fn create_or_login_oidc_user(
 
     let access_token = access_token::sign(id, ca, &mut tx).await?;
 
+    sqlx::query!("UPDATE users SET last_login = NOW() WHERE id = $1", id)
+        .execute(&mut tx)
+        .await?;
+
     tx.commit().await?;
 
     Ok(http::TokenResponse {

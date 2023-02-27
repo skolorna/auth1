@@ -20,6 +20,62 @@
     },
     "query": "SELECT COUNT(1) FROM certificates WHERE naf > $1"
   },
+  "0594e7dfbd5d17a4837c9c79e0d5c14ce0897aba13f1ed7754353747bc240436": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "email",
+          "ordinal": 1,
+          "type_info": "Varchar"
+        },
+        {
+          "name": "full_name",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 3,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "last_login",
+          "ordinal": 4,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT id, email, full_name, created_at, last_login FROM users WHERE id = $1"
+  },
+  "5c948122c3a1469040cf14571318ec26a5ff98d08011d3db5d6e41377a810b41": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "UPDATE users SET last_login = NOW() WHERE id = $1"
+  },
   "61d5e0975cc811337a3a41c4e387c111cb56c6f12599c67c34470248f5e2d7f7": {
     "describe": {
       "columns": [
@@ -133,68 +189,6 @@
       }
     },
     "query": "SELECT id, key FROM certificates WHERE naf > $1 ORDER BY naf ASC"
-  },
-  "b82088b4a1fb594bbd8dc4391bd9dba7872a42187dff0658add64551610ce178": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "email",
-          "ordinal": 1,
-          "type_info": "Varchar"
-        },
-        {
-          "name": "verified",
-          "ordinal": 2,
-          "type_info": "Bool"
-        },
-        {
-          "name": "full_name",
-          "ordinal": 3,
-          "type_info": "Text"
-        },
-        {
-          "name": "created_at",
-          "ordinal": 4,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "last_login",
-          "ordinal": 5,
-          "type_info": "Timestamptz"
-        }
-      ],
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        true
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid"
-        ]
-      }
-    },
-    "query": "SELECT id, email, verified, full_name, created_at, last_login FROM users WHERE id = $1"
-  },
-  "c4dfb47f121e064c7f380a3bd5ab401b8ec56cb854df4ebb21ec46975b5f6e09": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Uuid"
-        ]
-      }
-    },
-    "query": "UPDATE users SET verified = true, last_login = NOW() WHERE id = $1"
   },
   "d65e3e39fe153b8bb323030c970bcdec74d7aa82427e2f083631f1dc3e28258e": {
     "describe": {

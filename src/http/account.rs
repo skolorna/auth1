@@ -24,7 +24,6 @@ struct User {
     id: Uuid,
     email: String,
     full_name: String,
-    verified: bool,
     #[serde(with = "time::serde::rfc3339")]
     created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339::option")]
@@ -64,7 +63,7 @@ async fn register(
 async fn get_current_user(ctx: Extension<ApiContext>, identity: Identity) -> Result<Json<User>> {
     let user = sqlx::query_as!(
         User,
-        "SELECT id, email, verified, full_name, created_at, last_login FROM users WHERE id = $1",
+        "SELECT id, email, full_name, created_at, last_login FROM users WHERE id = $1",
         identity.claims.sub
     )
     .fetch_one(&ctx.db)
