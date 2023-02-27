@@ -83,7 +83,7 @@ async fn request_token(
 
             if matches!(claims.band, oob::Band::Email) {
                 sqlx::query!(
-                    "UPDATE users SET verified = true, last_login = NOW() WHERE id = $1",
+                    "UPDATE users SET last_login = NOW() WHERE id = $1",
                     claims.sub
                 )
                 .execute(&mut tx)
