@@ -110,11 +110,9 @@ async fn request_token(
             nonce,
             provider,
         } => {
-            let client = ctx.oidc.get_client(&provider);
+            let client = ctx.oidc.get_client(&provider).await?;
 
-            let claims = id_token
-                .into_claims(&client.id_token_verifier(), &nonce)
-                .unwrap();
+            let claims = id_token.into_claims(&client.id_token_verifier(), &nonce)?;
 
             create_or_login_oidc_user(claims, &ctx.ca, &mut tx).await?
         }

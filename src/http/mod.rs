@@ -8,7 +8,7 @@ use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
 
-use crate::{email, oidc::OIDC, x509, Config};
+use crate::{email, oidc::Oidc, x509, Config};
 
 mod account;
 mod error;
@@ -29,14 +29,14 @@ pub struct ApiContext {
     db: PgPool,
     email: Arc<email::Client>,
     ca: Arc<RwLock<x509::Authority>>,
-    oidc: Arc<OIDC>,
+    oidc: Arc<Oidc>,
 }
 
 pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
     let client = config.email_client()?;
     let ca = config.ca()?;
 
-    let app = app(db, client, ca, config.oidc().await?);
+    let app = app(db, client, ca, config.oidc()?);
 
     axum::Server::bind(&SocketAddr::from(([0, 0, 0, 0], 8000)))
         .serve(app.into_make_service())
@@ -48,7 +48,7 @@ pub fn app(
     db: PgPool,
     email: email::Client,
     ca: Arc<RwLock<x509::Authority>>,
-    oidc: OIDC,
+    oidc: Oidc,
 ) -> Router {
     Router::new()
         .nest("/account", account::routes())

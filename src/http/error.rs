@@ -5,7 +5,7 @@ use axum::{
 use thiserror::Error;
 use tracing::error;
 
-use crate::jwt::InvalidTokenReason;
+use crate::{jwt::InvalidTokenReason, oidc};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -30,7 +30,9 @@ pub enum Error {
     #[error("forbidden")]
     Forbidden,
     #[error("oidc error")]
-    OIDC,
+    Oidc(#[from] oidc::Error),
+    #[error("the provided email is missing or unverified")]
+    OidcInvalidEmail,
 }
 
 impl Error {
@@ -45,7 +47,8 @@ impl Error {
             Self::InvalidOobToken(_) => StatusCode::BAD_REQUEST,
             Self::AccountNotFound => StatusCode::BAD_REQUEST,
             Self::Forbidden => StatusCode::FORBIDDEN,
-            Self::OIDC => StatusCode::BAD_REQUEST,
+            Self::Oidc(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::OidcInvalidEmail => StatusCode::BAD_REQUEST,
         }
     }
 
@@ -110,21 +113,14 @@ impl From<handlebars::RenderError> for Error {
     }
 }
 
-type OIDCTokenError =
-    openidconnect::core::CoreRequestTokenError<openidconnect::reqwest::AsyncHttpClientError>;
-
-impl From<OIDCTokenError> for Error {
-    fn from(value: OIDCTokenError) -> Self {
-        error!("oidc token error: {value}");
-        Self::OIDC
+impl From<oidc::DiscoveryError> for Error {
+    fn from(e: oidc::DiscoveryError) -> Self {
+        Self::Oidc(oidc::Error::Discovery(e))
     }
 }
 
-type OIDCUserInfoError = openidconnect::UserInfoError<openidconnect::reqwest::AsyncHttpClientError>;
-
-impl From<OIDCUserInfoError> for Error {
-    fn from(value: OIDCUserInfoError) -> Self {
-        error!("oidc user info error: {value}");
-        Self::OIDC
+impl From<openidconnect::ClaimsVerificationError> for Error {
+    fn from(e: openidconnect::ClaimsVerificationError) -> Self {
+        Self::Oidc(oidc::Error::ClaimsVerification(e))
     }
 }
