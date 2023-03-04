@@ -23,7 +23,7 @@ handlebars = "4.3.5"
 http-cache-reqwest = { version = "0.7.2", default-features = false, features = ["manager-moka"] }
 jsonwebtoken = "8.1.1"
 jwk = { version = "0.1.0", path = "jwk" }
-lettre = { version = "0.10.1", default-features = false, features = [
+lettre = { version = "0.10.3", default-features = false, features = [
   "builder",
   "tokio1-rustls-tls",
   "tracing",
