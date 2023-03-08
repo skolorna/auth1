@@ -11,7 +11,7 @@ anyhow = "1.0.66"
 arbitrary = { version = "1.1.7", optional = true, features = ["derive"] }
 auth1-sdk = { path = "sdk" }
 axum = { version = "0.6.7", features = ["headers"] }
-axum-extra = { version = "0.5.0", features = ["cookie"] }
+axum-extra = { version = "0.7.0", features = ["cookie"] }
 axum-tracing-opentelemetry = { git = "https://github.com/akeamc/axum-tracing-opentelemetry" }
 base64 = "0.21.0"
 blake3 = "1.3.1"
@@ -20,7 +20,9 @@ data-encoding = "2.3.2"
 dotenv = "0.15.0"
 futures = "0.3.25"
 handlebars = "4.3.5"
-http-cache-reqwest = { version = "0.7.2", default-features = false, features = ["manager-moka"] }
+http-cache-reqwest = { git = "https://github.com/akeamc/http-cache", version = "0.7.2", default-features = false, features = [
+  "manager-moka",
+] }
 jsonwebtoken = "8.1.1"
 jwk = { version = "0.1.0", path = "jwk" }
 lettre = { version = "0.10.1", default-features = false, features = [
@@ -41,7 +43,9 @@ opentelemetry = { version = "0.18.0", features = ["rt-tokio"] }
 opentelemetry-otlp = "0.11.0"
 opentelemetry-semantic-conventions = "0.10.0"
 rand = "0.8.5"
-reqwest = { version = "0.11.14", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "0.11.14", default-features = false, features = [
+  "rustls-tls",
+] }
 reqwest-middleware = "0.2.0"
 serde = { version = "1.0.145", features = ["derive"] }
 serde_with = { version = "2.0.1", features = ["base64"] }
