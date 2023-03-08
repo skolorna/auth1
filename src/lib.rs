@@ -9,11 +9,8 @@ use lettre::{
     Tokio1Executor,
 };
 use notify::{RecommendedWatcher, Watcher};
-use oidc::OIDC;
-use openidconnect::{
-    core::{CoreClient, CoreProviderMetadata},
-    ClientId, ClientSecret, IssuerUrl, RedirectUrl,
-};
+use oidc::{Oidc, ProviderInfo};
+use openidconnect::{ClientId, ClientSecret, IssuerUrl, RedirectUrl};
 use tokio::sync::{mpsc, RwLock};
 use tracing::{error, info, warn};
 
@@ -123,23 +120,14 @@ impl Config {
         }
     }
 
-    pub async fn oidc(&self) -> anyhow::Result<OIDC> {
-        let google_metadata = CoreProviderMetadata::discover_async(
-            IssuerUrl::new("https://accounts.google.com".to_owned())?,
-            openidconnect::reqwest::async_http_client,
-        )
-        .await?;
-
-        Ok(OIDC {
-            google: CoreClient::from_provider_metadata(
-                google_metadata,
-                ClientId::new(self.google_client_id.clone()),
-                Some(ClientSecret::new(self.google_client_secret.clone())),
-            )
-            .set_redirect_uri(RedirectUrl::new(format!(
-                "{}/login/google/code",
-                self.public_url
-            ))?),
+    pub fn oidc(&self) -> anyhow::Result<Oidc> {
+        Ok(Oidc {
+            google: ProviderInfo {
+                issuer_url: IssuerUrl::new("https://accounts.google.com".to_owned())?,
+                client_id: ClientId::new(self.google_client_id.clone()),
+                client_secret: ClientSecret::new(self.google_client_secret.clone()),
+                redirect_url: RedirectUrl::new(format!("{}/login/google/code", self.public_url))?,
+            },
         })
     }
 }
