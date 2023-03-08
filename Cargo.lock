@@ -387,7 +387,7 @@ dependencies = [
  "time",
  "tokio",
  "tower",
- "tower-http 0.3.5",
+ "tower-http 0.4.0",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -3689,6 +3689,7 @@ dependencies = [
  "tower",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
