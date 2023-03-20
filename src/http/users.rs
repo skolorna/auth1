@@ -1,16 +1,17 @@
 use axum::{
-    extract::Path,
+    extract::{Path, State},
     response::{IntoResponse, Response},
     routing::get,
-    Extension, Json, Router,
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::http::extract::Identity;
 
-use super::{ApiContext, Error, Result};
+use super::{AppState, Error, Result};
 
 #[derive(Debug, Serialize)]
 struct Profile {
@@ -20,16 +21,13 @@ struct Profile {
     created_at: OffsetDateTime,
 }
 
-async fn get_profile(
-    ctx: Extension<ApiContext>,
-    Path(id): Path<Uuid>,
-) -> Result<impl IntoResponse> {
+async fn get_profile(State(db): State<PgPool>, Path(id): Path<Uuid>) -> Result<impl IntoResponse> {
     let profile = sqlx::query_as!(
         Profile,
         "SELECT id, full_name, created_at FROM users WHERE id = $1",
         id,
     )
-    .fetch_optional(&ctx.db)
+    .fetch_optional(&db)
     .await?
     .ok_or(Error::AccountNotFound)?;
 
@@ -48,7 +46,7 @@ impl UpdateProfile {
 }
 
 async fn update_profile(
-    ctx: Extension<ApiContext>,
+    State(db): State<PgPool>,
     identity: Identity,
     Path(id): Path<Uuid>,
     Json(data): Json<UpdateProfile>,
@@ -58,7 +56,7 @@ async fn update_profile(
     }
 
     if data.is_empty() {
-        return Ok(get_profile(ctx, Path(id)).await?.into_response());
+        return Ok(get_profile(State(db), Path(id)).await?.into_response());
     }
 
     let profile = sqlx::query_as!(
@@ -66,11 +64,11 @@ async fn update_profile(
         "UPDATE users SET full_name = COALESCE($1, full_name) WHERE id = $2 RETURNING id, full_name, created_at",
         data.full_name,
         id,
-    ).fetch_one(&ctx.db).await?;
+    ).fetch_one(&db).await?;
 
     Ok(([("cache-control", "no-cache")], Json(profile)).into_response())
 }
 
-pub fn routes() -> Router {
-    Router::new().route("/:id/profile", get(get_profile).patch(update_profile))
+pub fn routes() -> Router<AppState> {
+    Router::<_>::new().route("/:id/profile", get(get_profile).patch(update_profile))
 }

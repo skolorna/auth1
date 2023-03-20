@@ -1,6 +1,6 @@
 use std::iter;
 
-use axum::{response::IntoResponse, routing::get, Extension, Json, Router};
+use axum::{extract::State, response::IntoResponse, routing::get, Json, Router};
 use futures::TryStreamExt;
 use jwk::{Jwk, X509Ext};
 use openssl::x509::X509;
@@ -9,14 +9,15 @@ use uuid::Uuid;
 
 use crate::x509;
 
-use super::{ApiContext, Error, Result};
+use super::{AppState, Error, Result};
 
 const JWKS_CACHE_TTL: Duration = Duration::seconds(15);
 
-async fn list(ctx: Extension<ApiContext>) -> Result<impl IntoResponse> {
-    let mut conn = ctx.db.acquire().await?;
+async fn list(state: State<AppState>) -> Result<impl IntoResponse> {
+    let mut conn = state.db.acquire().await?;
 
-    ctx.ca
+    state
+        .ca
         .read()
         .await
         .sig_key_foresight(&mut conn, JWKS_CACHE_TTL * 2)
@@ -52,6 +53,6 @@ async fn list(ctx: Extension<ApiContext>) -> Result<impl IntoResponse> {
     ))
 }
 
-pub fn routes() -> Router {
-    Router::new().route("/", get(list))
+pub fn routes() -> Router<AppState> {
+    Router::<_>::new().route("/", get(list))
 }

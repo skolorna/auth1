@@ -1,5 +1,5 @@
 use anyhow::Context;
-use axum::{response::IntoResponse, routing::get, Extension, Json, Router};
+use axum::{extract::FromRef, response::IntoResponse, routing::get, Json, Router};
 
 use axum_tracing_opentelemetry::opentelemetry_tracing_layer;
 use serde::Serialize;
@@ -24,8 +24,8 @@ pub use token::TokenResponse;
 
 pub type Result<T, E = Error> = core::result::Result<T, E>;
 
-#[derive(Clone)]
-pub struct ApiContext {
+#[derive(FromRef, Clone)]
+pub struct AppState {
     db: PgPool,
     email: Arc<email::Client>,
     ca: Arc<RwLock<x509::Authority>>,
@@ -50,21 +50,21 @@ pub fn app(
     ca: Arc<RwLock<x509::Authority>>,
     oidc: Oidc,
 ) -> Router {
-    Router::new()
+    Router::<_>::new()
         .nest("/account", account::routes())
         .nest("/keys", keys::routes())
         .nest("/users", users::routes())
         .nest("/token", token::routes())
         .nest("/login", login::routes())
-        .layer(Extension(ApiContext {
+        .layer(opentelemetry_tracing_layer())
+        .route("/health", get(health))
+        .layer(CorsLayer::very_permissive())
+        .with_state(AppState {
             db,
             email: Arc::new(email),
             ca,
             oidc: Arc::new(oidc),
-        }))
-        .layer(opentelemetry_tracing_layer())
-        .route("/health", get(health))
-        .layer(CorsLayer::very_permissive())
+        })
 }
 
 #[derive(Debug, Serialize)]

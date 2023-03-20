@@ -1,7 +1,8 @@
 use axum::{
+    extract::State,
     response::{IntoResponse, Response},
     routing::post,
-    Extension, Form, Json, Router,
+    Form, Json, Router,
 };
 use openidconnect::core::CoreIdToken;
 use serde::{Deserialize, Serialize};
@@ -13,7 +14,7 @@ use crate::{
     oob::{self, Otp},
 };
 
-use super::{ApiContext, Result};
+use super::{AppState, Result};
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "grant_type", rename_all = "snake_case")]
@@ -66,7 +67,7 @@ pub enum TokenType {
 
 #[instrument(skip_all)]
 async fn request_token(
-    ctx: Extension<ApiContext>,
+    ctx: State<AppState>,
     Form(req): Form<TokenRequest>,
 ) -> Result<impl IntoResponse> {
     let mut tx = ctx.db.begin().await?;
@@ -123,6 +124,6 @@ async fn request_token(
     Ok(res)
 }
 
-pub fn routes() -> Router {
-    Router::new().route("/", post(request_token))
+pub fn routes() -> Router<AppState> {
+    Router::<_>::new().route("/", post(request_token))
 }

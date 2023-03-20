@@ -10,7 +10,7 @@ edition = "2021"
 anyhow = "1.0.66"
 arbitrary = { version = "1.1.7", optional = true, features = ["derive"] }
 auth1-sdk = { path = "sdk" }
-axum = { version = "0.6.7", features = ["headers"] }
+axum = { version = "0.6.7", features = ["headers", "macros"] }
 axum-extra = { version = "0.7.0", features = ["cookie"] }
 axum-tracing-opentelemetry = { git = "https://github.com/akeamc/axum-tracing-opentelemetry" }
 base64 = "0.21.0"

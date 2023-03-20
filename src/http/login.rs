@@ -1,8 +1,9 @@
 use axum::{
+    extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::post,
-    Extension, Json, Router,
+    Json, Router,
 };
 use lettre::message::Mailbox;
 use serde::{Deserialize, Serialize};
@@ -11,7 +12,7 @@ use uuid::Uuid;
 
 use crate::{email::send_login_email, oob};
 
-use super::{ApiContext, Error, Result};
+use super::{AppState, Error, Result};
 
 #[derive(Debug, Deserialize)]
 pub struct LoginRequest {
@@ -30,10 +31,10 @@ impl IntoResponse for LoginResponse {
 }
 
 async fn login(
-    ctx: Extension<ApiContext>,
+    state: State<AppState>,
     Json(LoginRequest { email }): Json<LoginRequest>,
 ) -> Result<LoginResponse> {
-    let mut tx = ctx.db.begin().await?;
+    let mut tx = state.db.begin().await?;
 
     let (full_name, user, secret) = sqlx::query_as::<_, (String, Uuid, Option<Vec<u8>>)>(
         "SELECT full_name, id, oob_secret FROM users WHERE email = $1",
@@ -59,7 +60,7 @@ async fn login(
 
     let (token, otp) = oob::sign(user, oob::Band::Email, &email, &secret);
 
-    send_login_email(&ctx.email, mailbox, otp).await?;
+    send_login_email(&state.email, mailbox, otp).await?;
 
     tx.commit().await?;
 
@@ -124,8 +125,8 @@ async fn login(
 //     Ok(())
 // }
 
-pub fn routes() -> Router {
-    Router::new().route("/", post(login))
+pub fn routes() -> Router<AppState> {
+    Router::<_>::new().route("/", post(login))
     // .route("/google", get(oauth_login))
     // .route("/google/code", get(oauth_callback))
 }
