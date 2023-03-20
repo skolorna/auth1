@@ -19,6 +19,7 @@ clap = { version = "4.0.15", features = ["derive", "env"] }
 data-encoding = "2.3.2"
 dotenv = "0.15.0"
 futures = "0.3.25"
+gethostname = "0.4.1"
 handlebars = "4.3.5"
 http-cache-reqwest = { version = "0.8.0", default-features = false, features = [
   "manager-moka",
@@ -39,8 +40,8 @@ notify = "5.0.0"
 once_cell = "1.17.1"
 openidconnect = { version = "2.5.0", default-features = false }
 openssl = "0.10.42"
-opentelemetry = { version = "0.18.0", features = ["rt-tokio"] }
-opentelemetry-otlp = "0.11.0"
+opentelemetry = { version = "0.18.0", features = ["rt-tokio", "metrics"] }
+opentelemetry-otlp = { version = "0.11.0", features = ["metrics"] }
 opentelemetry-semantic-conventions = "0.10.0"
 rand = "0.8.5"
 reqwest = { version = "0.11.14", default-features = false, features = [

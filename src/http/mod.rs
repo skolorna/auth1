@@ -1,7 +1,13 @@
 use anyhow::Context;
-use axum::{extract::FromRef, response::IntoResponse, routing::get, Json, Router};
+use axum::{
+    extract::{FromRef, State},
+    response::IntoResponse,
+    routing::get,
+    Json, Router,
+};
 
 use axum_tracing_opentelemetry::opentelemetry_tracing_layer;
+use opentelemetry::metrics::Counter;
 use serde::Serialize;
 use sqlx::PgPool;
 use std::{net::SocketAddr, sync::Arc};
@@ -30,13 +36,24 @@ pub struct AppState {
     email: Arc<email::Client>,
     ca: Arc<RwLock<x509::Authority>>,
     oidc: Arc<Oidc>,
+    issued_tokens: Counter<u64>,
 }
 
 pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
-    let client = config.email_client()?;
-    let ca = config.ca()?;
+    let meter = opentelemetry::global::meter("auth1");
 
-    let app = app(db, client, ca, config.oidc()?);
+    let issued_tokens = meter
+        .u64_counter("issued_tokens")
+        .with_description("Total number of successful token requests")
+        .init();
+
+    let app = app().with_state(AppState {
+        db,
+        email: Arc::new(config.email_client()?),
+        ca: config.ca()?,
+        oidc: Arc::new(config.oidc()?),
+        issued_tokens,
+    });
 
     axum::Server::bind(&SocketAddr::from(([0, 0, 0, 0], 8000)))
         .serve(app.into_make_service())
@@ -44,12 +61,7 @@ pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
         .context("serve failed")
 }
 
-pub fn app(
-    db: PgPool,
-    email: email::Client,
-    ca: Arc<RwLock<x509::Authority>>,
-    oidc: Oidc,
-) -> Router {
+pub fn app() -> Router<AppState> {
     Router::<_>::new()
         .nest("/account", account::routes())
         .nest("/keys", keys::routes())
@@ -59,12 +71,6 @@ pub fn app(
         .layer(opentelemetry_tracing_layer())
         .route("/health", get(health))
         .layer(CorsLayer::very_permissive())
-        .with_state(AppState {
-            db,
-            email: Arc::new(email),
-            ca,
-            oidc: Arc::new(oidc),
-        })
 }
 
 #[derive(Debug, Serialize)]

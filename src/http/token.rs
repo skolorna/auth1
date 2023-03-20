@@ -5,6 +5,7 @@ use axum::{
     Form, Json, Router,
 };
 use openidconnect::core::CoreIdToken;
+use opentelemetry::{Context, KeyValue};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
@@ -31,6 +32,16 @@ enum TokenRequest {
         nonce: openidconnect::Nonce,
         provider: Provider,
     },
+}
+
+impl TokenRequest {
+    fn grant_type(&self) -> &'static str {
+        match self {
+            TokenRequest::Otp { .. } => "otp",
+            TokenRequest::RefreshToken { .. } => "refresh_token",
+            TokenRequest::IdToken { .. } => "id_token",
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -71,6 +82,8 @@ async fn request_token(
     Form(req): Form<TokenRequest>,
 ) -> Result<impl IntoResponse> {
     let mut tx = ctx.db.begin().await?;
+
+    let grant_type = req.grant_type();
 
     let res = match req {
         TokenRequest::Otp { token, otp } => {
@@ -120,6 +133,12 @@ async fn request_token(
     };
 
     tx.commit().await?;
+
+    ctx.issued_tokens.add(
+        &Context::current(),
+        1,
+        &[KeyValue::new("grant_type", grant_type)],
+    );
 
     Ok(res)
 }
