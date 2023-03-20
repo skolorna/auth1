@@ -1,10 +1,5 @@
 use anyhow::Context;
-use axum::{
-    extract::{FromRef, State},
-    response::IntoResponse,
-    routing::get,
-    Json, Router,
-};
+use axum::{extract::FromRef, response::IntoResponse, routing::get, Json, Router};
 
 use axum_tracing_opentelemetry::opentelemetry_tracing_layer;
 use opentelemetry::metrics::Counter;

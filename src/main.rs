@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use anyhow::Context;
 use auth1::{http, Config};
 use clap::Parser;
@@ -7,23 +5,12 @@ use gethostname::gethostname;
 use opentelemetry::{
     global,
     sdk::{
-        export::{
-            self,
-            metrics::{
-                aggregation::{self, cumulative_temporality_selector},
-                StdoutExporter,
-            },
-        },
-        metrics::{
-            controllers::{self, BasicController},
-            processors, selectors,
-        },
-        propagation::TraceContextPropagator,
-        trace, Resource,
+        export::metrics::aggregation::cumulative_temporality_selector, metrics::selectors,
+        propagation::TraceContextPropagator, trace, Resource,
     },
     KeyValue,
 };
-use opentelemetry_otlp::{ExportConfig, WithExportConfig};
+use opentelemetry_otlp::WithExportConfig;
 use sqlx::postgres::PgPoolOptions;
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};

@@ -3,7 +3,7 @@ members = [".", "jwk", "sdk"]
 
 [package]
 name = "auth1"
-version = "0.2.20"
+version = "0.2.21"
 edition = "2021"
 
 [dependencies]
