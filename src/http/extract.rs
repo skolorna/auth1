@@ -1,37 +1,38 @@
 use axum::{
     async_trait,
-    extract::FromRequestParts,
+    extract::{FromRequestParts, State},
     headers::{authorization::Bearer, Authorization},
     http::request::Parts,
     response::{IntoResponse, Response},
-    Extension, TypedHeader,
+    TypedHeader,
 };
+use sqlx::PgPool;
 use tracing::debug;
 
-use crate::{http::ApiContext, jwt::access_token};
+use crate::{http::AppState, jwt::access_token};
 
 pub struct Identity {
     pub claims: access_token::Claims,
 }
 
 #[async_trait]
-impl<S> FromRequestParts<S> for Identity
-where
-    S: Send + Sync,
-{
+impl FromRequestParts<AppState> for Identity {
     type Rejection = Response;
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
         let TypedHeader(authorization) =
             TypedHeader::<Authorization<Bearer>>::from_request_parts(parts, state)
                 .await
                 .map_err(IntoResponse::into_response)?;
 
-        let Extension(ctx): Extension<ApiContext> = Extension::from_request_parts(parts, state)
+        let State(db) = State::<PgPool>::from_request_parts(parts, state)
             .await
-            .map_err(IntoResponse::into_response)?;
+            .unwrap();
 
-        let claims = access_token::verify(authorization.token(), &ctx.db)
+        let claims = access_token::verify(authorization.token(), &db)
             .await
             .map_err(IntoResponse::into_response)?;
 

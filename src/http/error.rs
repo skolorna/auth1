@@ -1,48 +1,39 @@
-use std::fmt::Display;
-
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use thiserror::Error;
 use tracing::error;
 
-use crate::jwt::InvalidTokenReason;
+use crate::{jwt::InvalidTokenReason, oidc};
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum Error {
+    #[error("an internal error occurred")]
     Internal,
+    #[error("database error")]
     Sqlx(sqlx::Error),
+    #[error("email error")]
     Lettre(lettre::error::Error),
+    #[error("email error")]
     Smtp(lettre::transport::smtp::Error),
+    #[error("email already in use")]
     EmailInUse,
+    #[error("invalid refresh token: {0}")]
     InvalidRefreshToken(InvalidTokenReason),
+    #[error("invalid access token: {0}")]
     InvalidAccessToken(InvalidTokenReason),
-    InvalidEmailToken(InvalidTokenReason),
-    InvalidResetToken(InvalidTokenReason),
+    #[error("invalid oob token: {0}")]
     InvalidOobToken(InvalidTokenReason),
+    #[error("account not found")]
     AccountNotFound,
+    #[error("forbidden")]
     Forbidden,
+    #[error("oidc error")]
+    Oidc(#[from] oidc::Error),
+    #[error("the provided email is missing or unverified")]
+    OidcInvalidEmail,
 }
-
-impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Internal | Self::Sqlx(_) | Self::Lettre(_) | Self::Smtp(_) => {
-                f.write_str("an internal error occurred")
-            }
-            Self::EmailInUse => f.write_str("email already in use"),
-            Self::InvalidRefreshToken(r) => write!(f, "invalid refresh token: {r}"),
-            Self::InvalidAccessToken(r) => write!(f, "invalid access token: {r}"),
-            Self::InvalidEmailToken(r) => write!(f, "invalid email token: {r}"),
-            Self::InvalidResetToken(r) => write!(f, "invalid reset token: {r}"),
-            Self::InvalidOobToken(r) => write!(f, "invalid oob token: {r}"),
-            Self::AccountNotFound => f.write_str("no account found"),
-            Self::Forbidden => f.write_str("forbidden"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 impl Error {
     pub const fn status_code(&self) -> StatusCode {
@@ -53,11 +44,11 @@ impl Error {
             Self::EmailInUse => StatusCode::CONFLICT,
             Self::InvalidRefreshToken(_) => StatusCode::UNAUTHORIZED,
             Self::InvalidAccessToken(_) => StatusCode::UNAUTHORIZED,
-            Self::InvalidEmailToken(_) => StatusCode::BAD_REQUEST,
-            Self::InvalidResetToken(_) => StatusCode::BAD_REQUEST,
             Self::InvalidOobToken(_) => StatusCode::BAD_REQUEST,
             Self::AccountNotFound => StatusCode::BAD_REQUEST,
             Self::Forbidden => StatusCode::FORBIDDEN,
+            Self::Oidc(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::OidcInvalidEmail => StatusCode::BAD_REQUEST,
         }
     }
 
@@ -71,6 +62,12 @@ impl Error {
 
     pub const fn email_in_use() -> Self {
         Self::EmailInUse
+    }
+}
+
+impl IntoResponse for Error {
+    fn into_response(self) -> Response {
+        (self.status_code(), self.to_string()).into_response()
     }
 }
 
@@ -116,8 +113,14 @@ impl From<handlebars::RenderError> for Error {
     }
 }
 
-impl IntoResponse for Error {
-    fn into_response(self) -> Response {
-        (self.status_code(), self.to_string()).into_response()
+impl From<oidc::DiscoveryError> for Error {
+    fn from(e: oidc::DiscoveryError) -> Self {
+        Self::Oidc(oidc::Error::Discovery(e))
+    }
+}
+
+impl From<openidconnect::ClaimsVerificationError> for Error {
+    fn from(e: openidconnect::ClaimsVerificationError) -> Self {
+        Self::Oidc(oidc::Error::ClaimsVerification(e))
     }
 }

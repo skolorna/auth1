@@ -1,3 +1,4 @@
+use ::base64::Engine;
 use der::asn1::BitStringRef;
 use der::oid::ObjectIdentifier;
 use der::{AnyRef, Encode, Sequence};
@@ -135,7 +136,7 @@ impl Key {
     }
 
     pub fn to_pem(&self) -> Vec<u8> {
-        let der_b64 = ::base64::encode(self.to_der());
+        let der_b64 = ::base64::engine::general_purpose::STANDARD.encode(self.to_der());
         let mut pem = Vec::new();
 
         writeln!(&mut pem, "-----BEGIN PUBLIC KEY-----").unwrap();

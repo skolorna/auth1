@@ -1,8 +1,9 @@
 use axum::{
+    extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::post,
-    Extension, Json, Router,
+    Json, Router,
 };
 use lettre::message::Mailbox;
 use serde::{Deserialize, Serialize};
@@ -11,7 +12,7 @@ use uuid::Uuid;
 
 use crate::{email::send_login_email, oob};
 
-use super::{ApiContext, Error, Result};
+use super::{AppState, Error, Result};
 
 #[derive(Debug, Deserialize)]
 pub struct LoginRequest {
@@ -30,10 +31,10 @@ impl IntoResponse for LoginResponse {
 }
 
 async fn login(
-    ctx: Extension<ApiContext>,
+    state: State<AppState>,
     Json(LoginRequest { email }): Json<LoginRequest>,
 ) -> Result<LoginResponse> {
-    let mut tx = ctx.db.begin().await?;
+    let mut tx = state.db.begin().await?;
 
     let (full_name, user, secret) = sqlx::query_as::<_, (String, Uuid, Option<Vec<u8>>)>(
         "SELECT full_name, id, oob_secret FROM users WHERE email = $1",
@@ -59,13 +60,73 @@ async fn login(
 
     let (token, otp) = oob::sign(user, oob::Band::Email, &email, &secret);
 
-    send_login_email(&ctx.email, mailbox, otp).await?;
+    send_login_email(&state.email, mailbox, otp).await?;
 
     tx.commit().await?;
 
     Ok(LoginResponse { token })
 }
 
-pub fn routes() -> Router {
-    Router::new().route("/", post(login))
+// async fn oauth_login(
+//     ctx: Extension<ApiContext>,
+//     cookie_jar: CookieJar,
+// ) -> Result<impl IntoResponse> {
+//     let client = &ctx.oidc.google;
+
+//     let (url, csrf_token, _nonce) = client.authorize_url(
+//             AuthenticationFlow::<CoreResponseType>::AuthorizationCode,
+//             CsrfToken::new_random,
+//             Nonce::new_random,
+//         )
+//         .add_scope(Scope::new("email".to_owned()))
+//         .add_scope(Scope::new("profile".to_owned()))
+//         .url();
+
+//     let csrf_cookie = Cookie::new("CSRF_TOKEN", csrf_token.secret().clone());
+
+//     Ok((
+//         StatusCode::SEE_OTHER,
+//         [(LOCATION, HeaderValue::try_from(url.as_str()).unwrap())],
+//         cookie_jar.add(csrf_cookie),
+//     ))
+// }
+
+// #[derive(Debug, Deserialize)]
+// struct CallbackParameters {
+//     code: AuthorizationCode,
+//     state: CsrfToken,
+// }
+
+// async fn oauth_callback(
+//     ctx: Extension<ApiContext>,
+//     Query(query): Query<CallbackParameters>,
+//     cookie_jar: CookieJar,
+// ) -> Result<impl IntoResponse> {
+//     if cookie_jar.get("CSRF_TOKEN").ok_or(Error::OIDC)?.value() != query.state.secret() {
+//         error!("csrf token mismatch");
+//         return Err(Error::OIDC);
+//     }
+
+//     let client = &ctx.oidc.google;
+
+//     let res = client
+//         .exchange_code(query.code)
+//         .request_async(async_http_client)
+//         .await?;
+
+//     let claims: CoreUserInfoClaims = client
+//         .user_info(res.access_token().clone(), None)
+//         .unwrap()
+//         .request_async(async_http_client)
+//         .await?;
+
+//     // create_or_login_oidc_user(claims, &ctx.ca, ctx.db).await?;
+
+//     Ok(())
+// }
+
+pub fn routes() -> Router<AppState> {
+    Router::<_>::new().route("/", post(login))
+    // .route("/google", get(oauth_login))
+    // .route("/google/code", get(oauth_callback))
 }

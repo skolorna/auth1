@@ -9,13 +9,17 @@ use lettre::{
     Tokio1Executor,
 };
 use notify::{RecommendedWatcher, Watcher};
+use oidc::{Oidc, ProviderInfo};
+use openidconnect::{ClientId, ClientSecret, IssuerUrl, RedirectUrl};
 use tokio::sync::{mpsc, RwLock};
 use tracing::{error, info, warn};
 
 pub mod email;
 pub mod http;
 pub mod jwt;
+pub mod oidc;
 pub mod oob;
+pub mod util;
 pub mod x509;
 
 #[derive(clap::Parser)]
@@ -31,24 +35,33 @@ pub struct Config {
     #[clap(long, env)]
     pub database_url: String,
 
+    /// OTP email login url template. Use `{otp}` in place of the one time password.
+    #[clap(long, env)]
+    pub login_url: email::LoginUrl,
+
+    #[clap(long, env)]
+    pub smtp_host: Option<String>,
+
+    #[clap(long, env)]
+    pub smtp_username: Option<String>,
+
+    #[clap(long, env)]
+    pub smtp_password: Option<String>,
+
+    #[clap(long, env, default_value = "http://localhost:8000")]
+    pub public_url: String,
+
+    #[clap(env)]
+    pub google_client_id: String,
+
+    #[clap(env)]
+    pub google_client_secret: String,
+
     #[clap(long, env, default_value = "10")]
     pub max_database_connections: u32,
 
     #[clap(long, env, default_value = "2")]
     pub min_database_connections: u32,
-
-    #[clap(env)]
-    pub smtp_host: Option<String>,
-
-    #[clap(env)]
-    pub smtp_username: Option<String>,
-
-    #[clap(env)]
-    pub smtp_password: Option<String>,
-
-    /// OTP email login url template. Use `{otp}` in place of the one time password.
-    #[clap(long, env)]
-    pub login_url: email::LoginUrl,
 
     #[clap(env, default_value = "http://localhost:4317")]
     pub otlp_endpoint: String,
@@ -105,6 +118,17 @@ impl Config {
                 .map(|ca| Arc::new(RwLock::new(ca)))
                 .map_err(Into::into),
         }
+    }
+
+    pub fn oidc(&self) -> anyhow::Result<Oidc> {
+        Ok(Oidc {
+            google: ProviderInfo {
+                issuer_url: IssuerUrl::new("https://accounts.google.com".to_owned())?,
+                client_id: ClientId::new(self.google_client_id.clone()),
+                client_secret: ClientSecret::new(self.google_client_secret.clone()),
+                redirect_url: RedirectUrl::new(format!("{}/login/google/code", self.public_url))?,
+            },
+        })
     }
 }
 

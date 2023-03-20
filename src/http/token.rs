@@ -1,23 +1,47 @@
 use axum::{
+    extract::State,
     response::{IntoResponse, Response},
     routing::post,
-    Extension, Form, Json, Router,
+    Form, Json, Router,
 };
+use openidconnect::core::CoreIdToken;
+use opentelemetry::{Context, KeyValue};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
 use crate::{
     jwt::{access_token, refresh_token},
+    oidc::{create_or_login_oidc_user, Provider},
     oob::{self, Otp},
 };
 
-use super::{ApiContext, Result};
+use super::{AppState, Result};
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "grant_type", rename_all = "snake_case")]
 enum TokenRequest {
-    Otp { token: String, otp: Otp },
-    RefreshToken { refresh_token: String },
+    Otp {
+        token: String,
+        otp: Otp,
+    },
+    RefreshToken {
+        refresh_token: String,
+    },
+    IdToken {
+        id_token: Box<CoreIdToken>,
+        nonce: openidconnect::Nonce,
+        provider: Provider,
+    },
+}
+
+impl TokenRequest {
+    fn grant_type(&self) -> &'static str {
+        match self {
+            TokenRequest::Otp { .. } => "otp",
+            TokenRequest::RefreshToken { .. } => "refresh_token",
+            TokenRequest::IdToken { .. } => "id_token",
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -54,10 +78,12 @@ pub enum TokenType {
 
 #[instrument(skip_all)]
 async fn request_token(
-    ctx: Extension<ApiContext>,
+    ctx: State<AppState>,
     Form(req): Form<TokenRequest>,
 ) -> Result<impl IntoResponse> {
     let mut tx = ctx.db.begin().await?;
+
+    let grant_type = req.grant_type();
 
     let res = match req {
         TokenRequest::Otp { token, otp } => {
@@ -71,7 +97,7 @@ async fn request_token(
 
             if matches!(claims.band, oob::Band::Email) {
                 sqlx::query!(
-                    "UPDATE users SET verified = true, last_login = NOW() WHERE id = $1",
+                    "UPDATE users SET last_login = NOW() WHERE id = $1",
                     claims.sub
                 )
                 .execute(&mut tx)
@@ -93,13 +119,30 @@ async fn request_token(
                 refresh_token: None,
             }
         }
+        TokenRequest::IdToken {
+            id_token,
+            nonce,
+            provider,
+        } => {
+            let client = ctx.oidc.get_client(&provider).await?;
+
+            let claims = id_token.into_claims(&client.id_token_verifier(), &nonce)?;
+
+            create_or_login_oidc_user(claims, &ctx.ca, &mut tx).await?
+        }
     };
 
     tx.commit().await?;
 
+    ctx.issued_tokens.add(
+        &Context::current(),
+        1,
+        &[KeyValue::new("grant_type", grant_type)],
+    );
+
     Ok(res)
 }
 
-pub fn routes() -> Router {
-    Router::new().route("/", post(request_token))
+pub fn routes() -> Router<AppState> {
+    Router::<_>::new().route("/", post(request_token))
 }
