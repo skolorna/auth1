@@ -38,7 +38,7 @@ pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
     let meter = opentelemetry::global::meter("auth1");
 
     let issued_tokens = meter
-        .u64_counter("issued_tokens")
+        .u64_counter("auth1.issued_tokens")
         .with_description("Total number of successful token requests")
         .init();
 
